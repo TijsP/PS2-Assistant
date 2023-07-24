@@ -23,7 +23,6 @@ public class Program
 
     //  Before release:
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
-    //  TODO:   Add autocomplete for specific command when using help
     //  TODO:   Remove user form User table when leaving guild
     //  TODO:   Check whether a user with a given character name already exists on the guild in question
     //  TODO:   Clean up code in HandleNicknameModal (i.e. multiple calls to playerdata...alias, etc)
@@ -36,6 +35,7 @@ public class Program
     //  TODO:   Add "Welcome to outfit" message in Welcome channel when user switches outfit
     //  TODO:   Annotate entire codebase
     //  TODO:   Add service to BotContext?
+    //  TODO:   Convert to use Interaction Framework?
     //  FIX:    ModalSubmitted handler is blocking the gateway task (wait for PR https://github.com/discord-net/Discord.Net/pull/2722)
     //  TODO:   Implement SendChannelMessage(guildId, channelId, message, [CallerMemberName] caller)
 
@@ -58,6 +58,7 @@ public class Program
         _botclient.Log += Log;
         _botclient.Ready += Client_Ready;
         _botclient.SlashCommandExecuted += SlashCommandHandler;
+        _botclient.AutocompleteExecuted += AutocompleteExecutedHandler;
         //_botclient.SelectMenuExecuted += MenuHandler;
         _botclient.UserJoined += UserJoined;
         _botclient.ButtonExecuted += ButtonExecutedHandler;
@@ -141,7 +142,7 @@ public class Program
             .WithDescription("Shows a list of commands and their parameters")
             .AddOption("page", ApplicationCommandOptionType.Integer, "The page number to display", minValue: 1)
             .AddOption("setup", ApplicationCommandOptionType.Boolean, "Explain how to set up the bot on a server")
-            .AddOption("command", ApplicationCommandOptionType.String, "Get help for a specific command");
+            .AddOption("command", ApplicationCommandOptionType.String, "Get help for a specific command", isAutocomplete: true);
         guildApplicationCommandProperties.Add(commandHelp.Build());
         globalApplicationCommandProperties.Add(commandHelp.Build());
 
@@ -377,6 +378,34 @@ public class Program
         }
     }
 
+    private async Task AutocompleteExecutedHandler(SocketAutocompleteInteraction interaction)
+    {
+        switch (interaction.Data.CommandName)
+        {
+            case "help":
+                if(interaction.Data.Current.Name == "command")
+                {
+                    await HandleHelpCommandOptionAutocomplete(interaction);
+                }
+                break;
+        }
+    }
+
+    private async Task HandleHelpCommandOptionAutocomplete(SocketAutocompleteInteraction interaction)
+    {
+        List<ApplicationCommandProperties> propertiesList = availableGuildCommands(interaction);
+        List<AutocompleteResult> results = new List<AutocompleteResult>();
+
+        foreach (ApplicationCommandProperties properties in propertiesList)
+        {
+            string name = properties.Name.IsSpecified ? (string)properties.Name : "no name found for command";
+            if (interaction.Data.Current.Value is string value && name.Contains(value))
+                results.Add(new AutocompleteResult { Name = name, Value = name });
+        }
+
+        await interaction.RespondAsync(results.Take(25), options: null);
+    }
+
     private async Task HandleNicknameModal(SocketModal socketModal)
     {
         await socketModal.DeferAsync();
@@ -534,15 +563,20 @@ public class Program
 
     private async Task HandleHelp(SocketSlashCommand command)
     {
+        bool noOptionsSpecified = command.Data.Options.Count == 0 ? true : false;
         int commandsPerPage = 4;
         int startingPage = 0;
         //  x.DefaultMemberPermissions are AND'ed together. When the result of an AND between x.Permissions and p is more than one, we know the user has at least one of the permission required for the command
-        List<ApplicationCommandProperties> availableCommands = globalApplicationCommandProperties.Where(x => { if (x.DefaultMemberPermissions.IsSpecified) return _botclient.GetGuild((ulong)command.GuildId!).GetUser(command.User.Id).GuildPermissions.Has(x.DefaultMemberPermissions.Value); else return true; }).ToList();
+        List<ApplicationCommandProperties> availableCommands = availableGuildCommands(command);
         int totalPages = (int)Math.Ceiling((double)availableCommands.Count / commandsPerPage);
 
         //  Only one entry for each option can exist
-        if ((Int64?)command.Data.Options.Where(x => x.Name == "page").FirstOrDefault(defaultValue: null)?.Value is Int64 requestedPage)
+        if ((Int64?)command.Data.Options.Where(x => x.Name == "page").FirstOrDefault(defaultValue: null)?.Value is Int64 || noOptionsSpecified)
         {
+            Int64 requestedPage = 1;
+            if (!noOptionsSpecified)
+                requestedPage = (Int64)command.Data.Options.Where(x => x.Name == "page").FirstOrDefault(defaultValue: null)?.Value!;
+
             if (requestedPage > totalPages)
                 requestedPage = totalPages;
 
@@ -743,8 +777,15 @@ public class Program
             return true;
         else if (channel.GetPermissionOverwrite(everyoneRole) is OverwritePermissions everyonePerms && (everyonePerms.ViewChannel == PermValue.Allow || everyonePerms.ViewChannel == PermValue.Inherit && everyoneRole.Permissions.ViewChannel is true) && (everyonePerms.SendMessages == PermValue.Allow || everyonePerms.SendMessages == PermValue.Inherit && channel.Guild.GetRole(everyoneRole.Id).Permissions.SendMessages is true))
             return true;
-        
         return false;
+    }
+        
+    //  Assumes the interaction took place in a guild; returns an empty list otherwise
+    List<ApplicationCommandProperties> availableGuildCommands(SocketInteraction interaction)
+    {
+        if(interaction.GuildId is null)
+            return new List<ApplicationCommandProperties>();
+        return globalApplicationCommandProperties.Where(x => { if (x.DefaultMemberPermissions.IsSpecified) return _botclient.GetGuild((ulong)interaction.GuildId!).GetUser(interaction.User.Id).GuildPermissions.Has(x.DefaultMemberPermissions.Value); else return true; }).ToList();
     }
 
     private async Task SendLogChannelMessageAsync(ulong guildId, string message, [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
