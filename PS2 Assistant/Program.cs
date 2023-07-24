@@ -2,21 +2,15 @@
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 using Discord;
-using Discord.Interactions;
 using Discord.WebSocket;
 using Newtonsoft.Json;
 using System.Text.Json.Serialization;
-using System.Reflection;
 using System.Text.RegularExpressions;
-using Discord.Commands;
 using PS2_Assistant.Data;
-using System.Net.Http.Json;
 using PS2_Assistant.Models;
 using Newtonsoft.Json.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Configuration.Json;
-using System.Collections.Generic;
 
 public class Program
 {
