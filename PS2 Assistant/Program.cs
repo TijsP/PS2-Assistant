@@ -24,7 +24,6 @@ public class Program
     //  Before release:
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
     //  TODO:   Add help command option for specific command
-    //  TODO:   Only list commands in help that the user has access to
     //  TODO:   Remove user form User table when leaving guild
     //  TODO:   Clean up code in HandleNicknameModal (i.e. multiple calls to playerdata...alias, etc)
 
@@ -536,8 +535,9 @@ public class Program
     {
         int commandsPerPage = 4;
         int startingPage = 0;
-        //List<ApplicationCommandProperties> availableCommands = globalApplicationCommandProperties.Where(x => ((SocketGuildUser)command.User).GuildPermissions.ToList().Any(p => p == x.DefaultMemberPermissions.Value)).ToList();
-        int totalPages = (int)Math.Ceiling((double)globalApplicationCommandProperties.Count / commandsPerPage);
+        //  x.DefaultMemberPermissions are AND'ed together. When the result of an AND between x.Permissions and p is more than one, we know the user has at least one of the permission required for the command
+        List<ApplicationCommandProperties> availableCommands = globalApplicationCommandProperties.Where(x => { if (x.DefaultMemberPermissions.IsSpecified) return _botclient.GetGuild((ulong)command.GuildId!).GetUser(command.User.Id).GuildPermissions.Has(x.DefaultMemberPermissions.Value); else return true; }).ToList();
+        int totalPages = (int)Math.Ceiling((double)availableCommands.Count / commandsPerPage);
 
         //  Only one entry for each option can exist
         if ((Int64?)command.Data.Options.Where(x => x.Name == "page").FirstOrDefault(defaultValue: null)?.Value is Int64 requestedPage) {
@@ -549,9 +549,9 @@ public class Program
 
         List<Embed> embeds = new List<Embed>();
 
-        for(int i = startingPage * commandsPerPage; i < globalApplicationCommandProperties.Count; i++)
+        for(int i = startingPage * commandsPerPage; i < availableCommands.Count; i++)
         {
-            SlashCommandProperties slashCommand = (SlashCommandProperties)globalApplicationCommandProperties[i];
+            SlashCommandProperties slashCommand = (SlashCommandProperties)availableCommands[i];
             string description = (string)slashCommand.Description;
             var embed = new EmbedBuilder()
                 .WithTitle("/" + slashCommand.Name)
@@ -575,7 +575,7 @@ public class Program
             }
 
             embed.Description = description;
-            if (i == (startingPage + 1) * commandsPerPage - 1 || i == globalApplicationCommandProperties.Count - 1)
+            if (i == (startingPage + 1) * commandsPerPage - 1 || i == availableCommands.Count - 1)
             {
                 embed.WithFooter($"page {startingPage + 1}/{totalPages}");
                 embeds.Add(embed.Build());
