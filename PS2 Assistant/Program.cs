@@ -23,17 +23,17 @@ public class Program
 
     //  Before release:
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
-    //  TODO:   Add help command option for specific command
+    //  TODO:   Add autocomplete for specific command when using help
     //  TODO:   Remove user form User table when leaving guild
+    //  TODO:   Check whether a user with a given character name already exists on the guild in question
     //  TODO:   Clean up code in HandleNicknameModal (i.e. multiple calls to playerdata...alias, etc)
 
     //  After release:
     //  TODO:   Periodically check and update outfit tag of members (and update in User table
     //  TODO:   Send message upon bot joining guild
-    //  TODO:   Add detection for when bot gets kicked while it is offline (to remove the database entry for that guild)
+    //  TODO:   Add detection for when bot gets kicked/added while it is offline (to remove the database entry for that guild)
     //  TODO:   Remove "Get started" message after user has been set up?
     //  TODO:   Add "Welcome to outfit" message in Welcome channel when user switches outfit
-    //  TODO:   Check whether a user with a given character name already exists on the guild in question
     //  TODO:   Annotate entire codebase
     //  TODO:   Add service to BotContext?
     //  FIX:    ModalSubmitted handler is blocking the gateway task (wait for PR https://github.com/discord-net/Discord.Net/pull/2722)
@@ -140,7 +140,8 @@ public class Program
             .WithName("help")
             .WithDescription("Shows a list of commands and their parameters")
             .AddOption("page", ApplicationCommandOptionType.Integer, "The page number to display", minValue: 1)
-            .AddOption("setup", ApplicationCommandOptionType.Boolean, "Explain how to set up the bot on a server");
+            .AddOption("setup", ApplicationCommandOptionType.Boolean, "Explain how to set up the bot on a server")
+            .AddOption("command", ApplicationCommandOptionType.String, "Get help for a specific command");
         guildApplicationCommandProperties.Add(commandHelp.Build());
         globalApplicationCommandProperties.Add(commandHelp.Build());
 
@@ -540,18 +541,51 @@ public class Program
         int totalPages = (int)Math.Ceiling((double)availableCommands.Count / commandsPerPage);
 
         //  Only one entry for each option can exist
-        if ((Int64?)command.Data.Options.Where(x => x.Name == "page").FirstOrDefault(defaultValue: null)?.Value is Int64 requestedPage) {
+        if ((Int64?)command.Data.Options.Where(x => x.Name == "page").FirstOrDefault(defaultValue: null)?.Value is Int64 requestedPage)
+        {
             if (requestedPage > totalPages)
                 requestedPage = totalPages;
 
             startingPage = (int)requestedPage - 1;
-        }
 
         List<Embed> embeds = new List<Embed>();
 
-        for(int i = startingPage * commandsPerPage; i < availableCommands.Count; i++)
+            for (int i = startingPage * commandsPerPage; i < availableCommands.Count; i++)
         {
             SlashCommandProperties slashCommand = (SlashCommandProperties)availableCommands[i];
+                var embed = CommandHelpEmbed(slashCommand);
+
+                if (i == (startingPage + 1) * commandsPerPage - 1 || i == availableCommands.Count - 1)
+                {
+                    embed.WithFooter($"page {startingPage + 1}/{totalPages}");
+                    embeds.Add(embed.Build());
+                    break;
+                }
+                embeds.Add(embed.Build());
+            }
+            await command.RespondAsync("Available commands:", embeds: embeds.ToArray());
+
+        } else if (command.Data.Options.Where(x => x.Name == "command").FirstOrDefault(defaultValue: null)?.Value is string requestedCommand)
+        {
+            if (requestedCommand.StartsWith("/"))
+                requestedCommand = requestedCommand.TrimStart('/');
+
+            if((SlashCommandProperties)availableCommands.Where(x => x.Name.Value.ToLower() == requestedCommand.ToLower()).FirstOrDefault(defaultValue: null)! is SlashCommandProperties slashCommand)
+            {
+                var embed = CommandHelpEmbed(slashCommand);
+                await command.RespondAsync(embed: embed.Build());
+            }else if((SlashCommandProperties)globalApplicationCommandProperties.Where(x => x.Name.Value.ToLower() == requestedCommand.ToLower()).FirstOrDefault(defaultValue: null)! is SlashCommandProperties)
+            {
+                await command.RespondAsync($"You don't have the right permissions to execute command `/{requestedCommand}`");
+            }
+            else
+            {
+                await command.RespondAsync($"Command `/{requestedCommand}` doesn't exist");
+            }
+        }
+    }
+    private EmbedBuilder CommandHelpEmbed(SlashCommandProperties slashCommand)
+    {
             string description = (string)slashCommand.Description;
             var embed = new EmbedBuilder()
                 .WithTitle("/" + slashCommand.Name)
@@ -575,17 +609,9 @@ public class Program
             }
 
             embed.Description = description;
-            if (i == (startingPage + 1) * commandsPerPage - 1 || i == availableCommands.Count - 1)
-            {
-                embed.WithFooter($"page {startingPage + 1}/{totalPages}");
-                embeds.Add(embed.Build());
-                break;
-            }
-            embeds.Add(embed.Build());
+        return embed;
         }
 
-        await command.RespondAsync("Available commands:", embeds: embeds.ToArray());
-    }
     private async Task HandleSetLogChannel(SocketSlashCommand command)
     {
         await command.DeferAsync();
