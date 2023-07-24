@@ -661,7 +661,7 @@ public class Program
         if(!hasPermissionsToWriteChannel(channel))
         {
             await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetLogChannel), $"Bot doesn't have the right permissions to post in channel {channel.Id} in guild {command.GuildId}"));
-            await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" and \"Send Messages\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role, either server-wide or in channel <#{channel.Id}>");
+            await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" and \"Send Messages\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
         }
     }
     private async Task HandleSetWelcomeChannel(SocketSlashCommand command)
@@ -683,7 +683,7 @@ public class Program
         if (!hasPermissionsToWriteChannel(channel))
         {
             await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetWelcomeChannel), $"Bot doesn't have the right permissions to post in channel {channel.Id} in guild {command.GuildId}"));
-            await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" and \"Send Messages\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role, either server-wide or in channel <#{channel.Id}>");
+            await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" and \"Send Messages\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
         }
     }
     private async Task HandleSetMemberRole(SocketSlashCommand command)
