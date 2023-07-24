@@ -24,6 +24,7 @@ public class Program
     //  Before release:
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
     //  TODO:   Add help command option for specific command
+    //  TODO:   Only list commands in help that the user has access to
     //  TODO:   Remove user form User table when leaving guild
     //  TODO:   Clean up code in HandleNicknameModal (i.e. multiple calls to playerdata...alias, etc)
 
@@ -148,6 +149,7 @@ public class Program
             .WithName("set-log-channel")
             .WithDescription("Sets the channel where this bot's log messages will be sent")
             .WithDMPermission(false)
+            .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("log-channel", ApplicationCommandOptionType.Channel, "Sets the log channel", isRequired: true);
         guildApplicationCommandProperties.Add(commandSetLogChannel.Build());
         globalApplicationCommandProperties.Add(commandSetLogChannel.Build());
@@ -156,6 +158,7 @@ public class Program
             .WithName("set-welcome-channel")
             .WithDescription("Sets the channel where new users will be greeted by the bot")
             .WithDMPermission(false)
+            .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("welcome-channel", ApplicationCommandOptionType.Channel, "Sets the welcome channel", isRequired: true);
         guildApplicationCommandProperties.Add(commandSetWelcomeChannel.Build());
         globalApplicationCommandProperties.Add(commandSetWelcomeChannel.Build());
@@ -164,6 +167,7 @@ public class Program
             .WithName("set-member-role")
             .WithDescription("Sets the role users will get if their character is in the outfit represented by this server")
             .WithDMPermission(false)
+            .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("member-role", ApplicationCommandOptionType.Role, "Sets the member role", isRequired: true);
         guildApplicationCommandProperties.Add(commandSetMemberRole.Build());
         globalApplicationCommandProperties.Add(commandSetMemberRole.Build());
@@ -172,6 +176,7 @@ public class Program
             .WithName("set-non-member-role")
             .WithDescription("Sets the role users will get if their character isn't in the outfit represented by this server")
             .WithDMPermission(false)
+            .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("non-member-role", ApplicationCommandOptionType.Role, "Sets the non-member role", isRequired: true);
         guildApplicationCommandProperties.Add(commandSetNonMemberRole.Build());
         globalApplicationCommandProperties.Add(commandSetNonMemberRole.Build());
@@ -180,6 +185,7 @@ public class Program
             .WithName("set-main-outfit")
             .WithDescription("Sets the the main outfit represented by this server")
             .WithDMPermission(false)
+            .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("outfit-tag", ApplicationCommandOptionType.String, "The tag of the outfit", isRequired: true, minLength: 1, maxLength: 4);
         guildApplicationCommandProperties.Add(commandSetMainOutfit.Build());
         globalApplicationCommandProperties.Add(commandSetMainOutfit.Build());
