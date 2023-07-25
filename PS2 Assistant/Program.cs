@@ -661,7 +661,7 @@ public class Program
         if(!hasPermissionsToWriteChannel(channel))
         {
             await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetLogChannel), $"Bot doesn't have the right permissions to post in channel {channel.Id} in guild {command.GuildId}"));
-            await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" and \"Send Messages\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
+            await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
         }
     }
     private async Task HandleSetWelcomeChannel(SocketSlashCommand command)
@@ -683,7 +683,7 @@ public class Program
         if (!hasPermissionsToWriteChannel(channel))
         {
             await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetWelcomeChannel), $"Bot doesn't have the right permissions to post in channel {channel.Id} in guild {command.GuildId}"));
-            await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" and \"Send Messages\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
+            await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
         }
     }
     private async Task HandleSetMemberRole(SocketSlashCommand command)
@@ -765,9 +765,9 @@ public class Program
     {
         SocketRole role = _botclient.GetGuild(channel.Guild.Id).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)!;     //  Bots always have a managed role of their own
         SocketRole everyoneRole = channel.Guild.EveryoneRole;
-        if (channel.GetPermissionOverwrite(role) is OverwritePermissions rolePerms && (rolePerms.ViewChannel == PermValue.Allow || rolePerms.ViewChannel == PermValue.Inherit && channel.Guild.GetRole(role.Id).Permissions.ViewChannel is true) && (rolePerms.SendMessages == PermValue.Allow || rolePerms.SendMessages == PermValue.Inherit && channel.Guild.GetRole(role.Id).Permissions.SendMessages is true))
+        if (channel.GetPermissionOverwrite(role) is OverwritePermissions rolePerms && rolePerms.ViewChannel == PermValue.Allow && (rolePerms.SendMessages == PermValue.Allow || rolePerms.SendMessages == PermValue.Inherit && channel.Guild.GetRole(role.Id).Permissions.SendMessages is true))
             return true;
-        else if (channel.GetPermissionOverwrite(_botclient.CurrentUser) is OverwritePermissions botPerms && (botPerms.ViewChannel == PermValue.Allow || botPerms.ViewChannel == PermValue.Inherit && channel.Guild.GetUser(_botclient.CurrentUser.Id).GuildPermissions.ViewChannel is true) && (botPerms.SendMessages == PermValue.Allow || botPerms.SendMessages == PermValue.Inherit && channel.Guild.GetUser(_botclient.CurrentUser.Id).GuildPermissions.SendMessages is true))
+        else if (channel.GetPermissionOverwrite(_botclient.CurrentUser) is OverwritePermissions botPerms && botPerms.ViewChannel == PermValue.Allow && (botPerms.SendMessages == PermValue.Allow || botPerms.SendMessages == PermValue.Inherit && channel.Guild.GetUser(_botclient.CurrentUser.Id).GuildPermissions.SendMessages is true))
             return true;
         else if (channel.GetPermissionOverwrite(everyoneRole) is OverwritePermissions everyonePerms && (everyonePerms.ViewChannel == PermValue.Allow || everyonePerms.ViewChannel == PermValue.Inherit && everyoneRole.Permissions.ViewChannel is true) && (everyonePerms.SendMessages == PermValue.Allow || everyonePerms.SendMessages == PermValue.Inherit && channel.Guild.GetRole(everyoneRole.Id).Permissions.SendMessages is true))
             return true;
