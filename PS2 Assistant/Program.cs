@@ -15,7 +15,6 @@ using Microsoft.IdentityModel.Tokens;
 
 public class Program
 {
-
     //  Before release:
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
     //  TODO:   Remove user form User table when leaving guild
@@ -25,7 +24,6 @@ public class Program
     //  After release:
     //  TODO:   Periodically check and update outfit tag of members (and update in User table
     //  TODO:   Send message upon bot joining guild
-    //  TODO:   Add detection for when bot gets kicked/added while it is offline (to remove the database entry for that guild)
     //  TODO:   Remove "Get started" message after user has been set up?
     //  TODO:   Add "Welcome to outfit" message in Welcome channel when user switches outfit
     //  TODO:   Annotate entire codebase
@@ -71,6 +69,28 @@ public class Program
 
         //  Wait for client to be ready
         while (!clientIsReady) ;
+
+        //  Check whether the bot was added to/removed from any guilds while offline
+        List<ulong> subscribedGuilds =  _botclient.Guilds.ToList().Select(x => x.Id).ToList();
+        List<ulong> addedGuilds = subscribedGuilds.Except(_botDatabase.Guilds.Select(x => x.GuildId).ToList()).ToList();
+        List<ulong> removedGuilds = _botDatabase.Guilds.Select(x => x.GuildId).ToList().Except(subscribedGuilds).ToList();
+
+        if (addedGuilds.Count != 0)
+        {
+            foreach (ulong guildId in addedGuilds)
+            {
+                await Log(new LogMessage(LogSeverity.Info, nameof(MainAsync), $"Bot was added to guild {guildId} while offline"));
+                await AddGuild(guildId);
+            }
+        }
+        if (removedGuilds.Count != 0)
+        {
+            foreach (ulong guildId in removedGuilds)
+            {
+                await Log(new LogMessage(LogSeverity.Info, nameof(MainAsync), $"Bot was removed from guild {guildId} while offline"));
+                await RemoveGuild(guildId);
+            }
+        }
 
         //  Handle command line input
         while (!stopBot)
@@ -277,23 +297,32 @@ public class Program
 
     public async Task JoinedGuildHandler(SocketGuild guild)
     {
-        await Task.Run(() => { if (_botDatabase.Guilds.Find(guild.Id) is null) _botDatabase.Guilds.Add(new Guild { GuildId = guild.Id, Channels = new Channels(), Roles = new Roles() }); });
-        _botDatabase.SaveChanges();
+        await AddGuild(guild.Id);
 
         await Log(new LogMessage(LogSeverity.Info, nameof(JoinedGuildHandler), $"Joined new guild: {guild.Id}"));
+    }
+    private async Task AddGuild(ulong guildId)
+    {
+        if (_botDatabase.Guilds.Find(guildId) is null)
+        {
+            await _botDatabase.Guilds.AddAsync(new Guild { GuildId = guildId, Channels = new Channels(), Roles = new Roles() });
+            await _botDatabase.SaveChangesAsync();
+        }
     }
 
     public async Task LeftGuildHandler(SocketGuild guild)
     {
-        await Task.Run(() =>
-        {
-            Guild? guildToLeave = _botDatabase.Guilds.Find(guild.Id);
-            if (guildToLeave != null)
-                _botDatabase.Guilds.Remove(guildToLeave);
-        });
-        _botDatabase.SaveChanges();
+        await RemoveGuild(guild.Id);
 
         await Log(new LogMessage(LogSeverity.Info, nameof(LeftGuildHandler), $"Left guild: {guild.Id}"));
+    }
+    private async Task RemoveGuild(ulong guildId)
+        {
+        if (_botDatabase.Guilds.Find(guildId) is Guild guildToLeave)
+        {
+                _botDatabase.Guilds.Remove(guildToLeave);
+            await _botDatabase.SaveChangesAsync();
+        }
     }
 
     private async Task ButtonExecutedHandler(SocketMessageComponent component)
