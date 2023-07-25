@@ -365,5 +365,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
-/PS2 Assistant/Assistant.db
+/PS2 Assistant/Assistant.*
 /PS2 Assistant/appsettings.json
