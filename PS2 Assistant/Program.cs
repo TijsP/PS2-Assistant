@@ -143,7 +143,7 @@ public class Program
 
         var commandSendNicknamePoll = new SlashCommandBuilder()
             .WithName("send-nickname-poll")
-            .WithDescription("Sends a poll that asks users for their in-game character name")
+            .WithDescription("Manually sends a poll that asks users for their in-game character name")
             .WithDMPermission(false)
             .AddOption("channel", ApplicationCommandOptionType.Channel, "The channel in which the poll will be sent");
         guildApplicationCommandProperties.Add(commandSendNicknamePoll.Build());
