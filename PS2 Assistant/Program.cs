@@ -17,7 +17,6 @@ public class Program
 {
     //  Before release:
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
-    //  TODO:   Remove user form User table when leaving guild
     //  TODO:   Check whether a user with a given character name already exists on the guild in question
     //  TODO:   Clean up code in HandleNicknameModal (i.e. multiple calls to playerdata...alias, etc)
 
@@ -54,6 +53,7 @@ public class Program
         _botclient.AutocompleteExecuted += AutocompleteExecutedHandler;
         //_botclient.SelectMenuExecuted += MenuHandler;
         _botclient.UserJoined += UserJoined;
+        _botclient.UserLeft += UserLeftHandler;
         _botclient.ButtonExecuted += ButtonExecutedHandler;
         _botclient.ModalSubmitted += ModalSubmittedHandler;
         _botclient.JoinedGuild += JoinedGuildHandler;
@@ -294,7 +294,16 @@ public class Program
 
         await Log(new LogMessage(LogSeverity.Info, nameof(UserJoined), $"User {user.Id} joined guild {user.Guild.Id}"));
     }
+    public async Task UserLeftHandler(SocketGuild guild, SocketUser user)
+    {
+        if(await _botDatabase.getGuildByGuildIdAsync(guild.Id) is Guild originalGuild && originalGuild.Users.Where(x => x.GuildId == guild.Id && x.SocketUserId == user.Id).FirstOrDefault(defaultValue: null) is User savedUser)
+        {
+            originalGuild.Users.Remove(savedUser);
+            await _botDatabase.SaveChangesAsync();
+        }
 
+        await Log(new LogMessage(LogSeverity.Info, nameof(UserLeftHandler), $"User {user.Id} left guild {guild.Id}"));
+    }
     public async Task JoinedGuildHandler(SocketGuild guild)
     {
         await AddGuild(guild.Id);
