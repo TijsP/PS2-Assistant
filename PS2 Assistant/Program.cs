@@ -149,6 +149,15 @@ public class Program
         guildApplicationCommandProperties.Add(commandSendNicknamePoll.Build());
         globalApplicationCommandProperties.Add(commandSendNicknamePoll .Build());
 
+        var commandIncludeNicknamePollInWelcomeMessage = new SlashCommandBuilder()
+            .WithName("include-nickname-poll")
+            .WithDescription("Includes a nickname poll in the welcome message when a new user joins")
+            .WithDMPermission(false)
+            .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
+            .AddOption("include", ApplicationCommandOptionType.Boolean, "Whether to include the poll or not", isRequired: true);
+        guildApplicationCommandProperties.Add(commandIncludeNicknamePollInWelcomeMessage.Build());
+        globalApplicationCommandProperties.Add(commandIncludeNicknamePollInWelcomeMessage.Build());
+
         var commandSetLogChannel = new SlashCommandBuilder()
             .WithName("set-log-channel")
             .WithDescription("Sets the channel where this bot's log messages will be sent")
@@ -247,6 +256,7 @@ public class Program
             if (hasPermissionsToWriteChannel((SocketGuildChannel)_botclient.GetChannel(welcomeChannelId)))
             {
                 await ((SocketTextChannel)_botclient.GetChannel(welcomeChannelId)).SendMessageAsync($"Welcome, {user.Mention}!");
+                if(_botDatabase.Guilds.Find(user.Guild.Id)?.askNicknameUponWelcome is true)
                 await SendNicknamePoll((SocketTextChannel)_botclient.GetChannel(welcomeChannelId));
             }
             else
@@ -345,6 +355,9 @@ public class Program
                 break;
             case "send-nickname-poll":
                 await HandleSendNicknamePoll(command);
+                break;
+            case "include-nickname-poll":
+                await HandleIncludeNicknamePoll(command);
                 break;
             case "set-log-channel":
                 await HandleSetLogChannel(command);
@@ -668,6 +681,23 @@ public class Program
         await command.RespondAsync($"Poll sent to <#{targetChannel.Id}>", ephemeral: respondEphemerally);
     }
 
+    private async Task HandleIncludeNicknamePoll(SocketSlashCommand command)
+    {
+        await command.DeferAsync();
+        if (_botDatabase.Guilds.Find(command.GuildId) is Guild guild && command.Data.Options.First().Value is bool include)
+        {
+            guild.askNicknameUponWelcome = include;
+            await command.FollowupAsync($"Welcome messages will {(include ? "" : "not")} include a nickname poll");
+            _botDatabase.SaveChanges();
+        }
+        else
+        {
+            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleIncludeNicknamePoll), $"No database entry found for guild {command.GuildId}"));
+            await command.FollowupAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
+        }
+
+    }
+
     private async Task HandleSetLogChannel(SocketSlashCommand command)
     {
         await command.DeferAsync();
@@ -714,6 +744,7 @@ public class Program
             await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
         }
     }
+
     private async Task HandleSetMemberRole(SocketSlashCommand command)
     {
         if (_botDatabase.Guilds.Find(command.GuildId)?.Roles is not Roles roles)
