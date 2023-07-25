@@ -16,9 +16,10 @@ using Microsoft.IdentityModel.Tokens;
 public class Program
 {
     //  Before release:
+    //  TODO:   Ensure bot role outranks member and non-member roles
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
     //  TODO:   Check whether a user with a given character name already exists on the guild in question
-    //  TODO:   Clean up code in HandleNicknameModal (i.e. multiple calls to playerdata...alias, etc)
+    //  TODO:   Add CLI info command
 
     //  After release:
     //  TODO:   Periodically check and update outfit tag of members (and update in User table
@@ -26,6 +27,7 @@ public class Program
     //  TODO:   Remove "Get started" message after user has been set up?
     //  TODO:   Add "Welcome to outfit" message in Welcome channel when user switches outfit
     //  TODO:   Annotate entire codebase
+    //  TODO:   Check for bot permissions upon joining guild
     //  TODO:   Add service to BotContext?
     //  TODO:   Convert to use Interaction Framework?
     //  FIX:    ModalSubmitted handler is blocking the gateway task (wait for PR https://github.com/discord-net/Discord.Net/pull/2722)
@@ -296,7 +298,7 @@ public class Program
     }
     public async Task UserLeftHandler(SocketGuild guild, SocketUser user)
     {
-        if(await _botDatabase.getGuildByGuildIdAsync(guild.Id) is Guild originalGuild && originalGuild.Users.Where(x => x.GuildId == guild.Id && x.SocketUserId == user.Id).FirstOrDefault(defaultValue: null) is User savedUser)
+        if(await _botDatabase.getGuildByGuildIdAsync(guild.Id) is Guild originalGuild && originalGuild.Users.Where(x => x.SocketUserId == user.Id).FirstOrDefault(defaultValue: null) is User savedUser)
         {
             originalGuild.Users.Remove(savedUser);
             await _botDatabase.SaveChangesAsync();
@@ -469,12 +471,12 @@ public class Program
 
         string nickname = socketModal.Data.Components.First().Value;
 
-        //  A nickname modal can ordinarily only be sent when a user joins a guild, so GuildId will not be null.
+        //  A nickname modal can only be sent in a guild, so GuildId will not be null.
         var findGuild = _botDatabase.getGuildByGuildIdAsync((ulong)socketModal.GuildId!);
         var jsonTask = _censusclient.GetStringAsync($"http://census.daybreakgames.com/s:{appSettings.GetConnectionString("CensusAPIKey")}/get/ps2:v2/character_name/?name.first_lower=*{nickname.ToLower()}&c:join=outfit_member_extended^on:character_id^inject_at:outfit^show:alias&c:limit=6&c:exactMatchFirst=true");
 
         //  Validate given nickname
-        nickname.Trim();
+        nickname = nickname.Trim();
         if (Regex.IsMatch(nickname, @"[\s]"))
         {
             await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"User {socketModal.User.Id} submitted an invalid username: {nickname}"));
@@ -506,23 +508,32 @@ public class Program
             }
 
             //  Set the Discord nickname of the user, including outfit tag and either the member or non-member role, as defined by the guild admin
+            string? alias = playerData?.character_name_list[0].outfit.alias;
             if (socketModal.User is IGuildUser guildUser)
             {
                 try
                 {
-                    await guildUser.ModifyAsync(x => x.Nickname = $"[{playerData?.character_name_list[0].outfit?.alias}] {nickname}");
-                    if (guild.OutfitTag is not null && playerData?.character_name_list[0].outfit.alias?.ToLower() == guild.OutfitTag.ToLower() && guild.Roles?.MemberRole is ulong memberRoleId)
+                    //  Assign Discord nickname and member/non-member role
+                    await guildUser.ModifyAsync(x => x.Nickname = $"[{alias}] {nickname}");
+                    if (guild.OutfitTag is not null && alias?.ToLower() == guild.OutfitTag.ToLower() && guild.Roles?.MemberRole is ulong memberRoleId)
                     {
                         await guildUser.AddRoleAsync(memberRoleId);
                         await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"Added role {memberRoleId} to user {socketModal.User.Id} in guild {socketModal.GuildId}"));
                     }
-                    else if (guild.OutfitTag is not null && playerData?.character_name_list[0].outfit.alias?.ToLower() != guild.OutfitTag.ToLower() && guild.Roles?.NonMemberRole is ulong nonMemberRoleId)
+                    else if (guild.OutfitTag is not null && alias?.ToLower() != guild.OutfitTag.ToLower() && guild.Roles?.NonMemberRole is ulong nonMemberRoleId)
                     {
                         await guildUser.AddRoleAsync(nonMemberRoleId);
                         await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"Added role {nonMemberRoleId} to user {socketModal.User.Id} in guild {socketModal.GuildId}"));
                     }
 
-                    guild.Users.Add(new User { CharacterName = nickname, CurrentOutfit = playerData?.character_name_list[0].outfit.alias, SocketUserId = socketModal.User.Id });
+                    //  Check whether user already exists in the database for this guild
+                    if (guild.Users.Where(x => x.SocketUserId == socketModal.User.Id).FirstOrDefault(defaultValue: null) is User user)
+                    {
+                        user.CharacterName = nickname;
+                        user.CurrentOutfit = alias;
+                    }
+                    else
+                        guild.Users.Add(new User { CharacterName = nickname, CurrentOutfit = alias, SocketUserId = socketModal.User.Id });
                     await _botDatabase.SaveChangesAsync();
 
                     await socketModal.ModifyOriginalResponseAsync(x => { x.Content = $"Nickname set to {guildUser.Mention}"; x.AllowedMentions = AllowedMentions.None; });
@@ -532,13 +543,13 @@ public class Program
                 catch (Exception ex)
                 {
                     await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), $"Unable to assign a nickname to guild user {socketModal.User.Id}. Encountered exception: \"{ex.Message}\""));
-                    await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set your nickname to \"[{playerData?.character_name_list[0].outfit?.alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
+                    await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set your nickname to \"[{alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
                 }
             }
             else
             {
                 await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), $"Could not convert user {socketModal.User.Id} in guild {socketModal.GuildId} from SocketUser to IGuildUser."));
-                await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set your nickname to \"[{playerData?.character_name_list[0].outfit?.alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
+                await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set your nickname to \"[{alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
             }
 
         }
