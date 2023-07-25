@@ -465,7 +465,7 @@ public class Program
 
     private async Task HandleNicknameModal(SocketModal socketModal)
     {
-        await socketModal.DeferAsync();
+        await socketModal.RespondAsync("Validating character name...");
 
         string nickname = socketModal.Data.Components.First().Value;
 
@@ -478,11 +478,10 @@ public class Program
         if (Regex.IsMatch(nickname, @"[\s]"))
         {
             await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"User {socketModal.User.Id} submitted an invalid username: {nickname}"));
-            await socketModal.FollowupAsync($"Invalid nickname submitted: {nickname}. Whitespace are not allowed. Please try again.", ephemeral: true);
+            await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Invalid nickname submitted: {nickname}. Whitespace are not allowed. Please try again.");
             return;
         }
         await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"User {socketModal.User.Id} submitted nickname: {nickname}"));
-        await socketModal.FollowupAsync("Validating character name...");
 
         //  Request players with this name from Census, including a few other, similar names
         string outfitDataJson = await jsonTask;
@@ -493,7 +492,7 @@ public class Program
             {
                 await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"Unable to find a match for name \"{nickname}\" in the Census database. Dumping returned JSON string as a debug log message."));
                 await Log(new LogMessage(LogSeverity.Debug, nameof(HandleNicknameModal), outfitDataJson));
-                await socketModal.FollowupAsync($"No exact match found for {nickname}. Please try again.", ephemeral: true);
+                await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"No exact match found for {nickname}. Please try again.");
                 return;
             }
 
@@ -502,7 +501,7 @@ public class Program
             if (guild is null)
             {
                 await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), $"No {nameof(Guild)} data found for guild id {socketModal.GuildId}"));
-                await socketModal.RespondAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
+                await socketModal.ModifyOriginalResponseAsync(x => x.Content = "Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
                 return;
             }
 
@@ -526,19 +525,20 @@ public class Program
                     guild.Users.Add(new User { CharacterName = nickname, CurrentOutfit = playerData?.character_name_list[0].outfit.alias, SocketUserId = socketModal.User.Id });
                     await _botDatabase.SaveChangesAsync();
 
-                    await socketModal.FollowupAsync($"We've now set you Discord nickname to your in-game name, to avoid potential confusion during tense moments.\nWith that you're all set, thanks for joining and have fun!", ephemeral: true);
+                    await socketModal.ModifyOriginalResponseAsync(x => { x.Content = $"Nickname set to {guildUser.Mention}"; x.AllowedMentions = AllowedMentions.None; });
+                    await socketModal.FollowupAsync($"We've now set your Discord nickname to your in-game name, to avoid potential confusion during tense moments.\nWith that you're all set, thanks for joining and have fun!", ephemeral: true);
                     return;
                 }
                 catch (Exception ex)
                 {
                     await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), $"Unable to assign a nickname to guild user {socketModal.User.Id}. Encountered exception: \"{ex.Message}\""));
-                    await socketModal.FollowupAsync($"Something went wrong when trying to set your nickname to \"[{playerData?.character_name_list[0].outfit?.alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!", ephemeral: false);
+                    await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set your nickname to \"[{playerData?.character_name_list[0].outfit?.alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
                 }
             }
             else
             {
                 await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), $"Could not convert user {socketModal.User.Id} in guild {socketModal.GuildId} from SocketUser to IGuildUser."));
-                await socketModal.FollowupAsync($"Something went wrong when trying to set your nickname to \"[{playerData?.character_name_list[0].outfit?.alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!", ephemeral: false);
+                await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set your nickname to \"[{playerData?.character_name_list[0].outfit?.alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
             }
 
         }
@@ -546,7 +546,7 @@ public class Program
         {
             await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), "Census failed to return a list of names. Dumping returned JSON string as a debug log message."));
             await Log(new LogMessage(LogSeverity.Debug, nameof(HandleNicknameModal), outfitDataJson));
-            await socketModal.FollowupAsync($"Whoops, something went wrong... Unable to find that user due to an error in the Census database.");
+            await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Whoops, something went wrong... Unable to find that user due to an error in the Census database.");
         }
     }
     private async Task HandleFirstWithRankCommand(SocketSlashCommand command)
