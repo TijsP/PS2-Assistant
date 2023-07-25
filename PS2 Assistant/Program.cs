@@ -11,6 +11,7 @@ using PS2_Assistant.Models;
 using Newtonsoft.Json.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 
 public class Program
 {
@@ -140,6 +141,14 @@ public class Program
         guildApplicationCommandProperties.Add(commandHelp.Build());
         globalApplicationCommandProperties.Add(commandHelp.Build());
 
+        var commandSendNicknamePoll = new SlashCommandBuilder()
+            .WithName("send-nickname-poll")
+            .WithDescription("Sends a poll that asks users for their in-game character name")
+            .WithDMPermission(false)
+            .AddOption("channel", ApplicationCommandOptionType.Channel, "The channel in which the poll will be sent");
+        guildApplicationCommandProperties.Add(commandSendNicknamePoll.Build());
+        globalApplicationCommandProperties.Add(commandSendNicknamePoll .Build());
+
         var commandSetLogChannel = new SlashCommandBuilder()
             .WithName("set-log-channel")
             .WithDescription("Sets the channel where this bot's log messages will be sent")
@@ -238,7 +247,7 @@ public class Program
             if (hasPermissionsToWriteChannel((SocketGuildChannel)_botclient.GetChannel(welcomeChannelId)))
             {
                 await ((SocketTextChannel)_botclient.GetChannel(welcomeChannelId)).SendMessageAsync($"Welcome, {user.Mention}!");
-                await ((SocketTextChannel)_botclient.GetChannel(welcomeChannelId)).SendMessageAsync($"To get started, press this button so we can set you up properly:", components: confirmationButton.Build());
+                await SendNicknamePoll((SocketTextChannel)_botclient.GetChannel(welcomeChannelId));
             }
             else
             {
@@ -333,6 +342,9 @@ public class Program
                 break;
             case "help":
                 await HandleHelp(command);
+                break;
+            case "send-nickname-poll":
+                await HandleSendNicknamePoll(command);
                 break;
             case "set-log-channel":
                 await HandleSetLogChannel(command);
@@ -640,6 +652,22 @@ public class Program
         return embed;
         }
 
+    private async Task HandleSendNicknamePoll(SocketSlashCommand command)
+    {
+        bool respondEphemerally = true;
+        SocketTextChannel targetChannel;
+        if (!command.Data.Options.IsNullOrEmpty() && command.Data.Options.First().Value is SocketTextChannel channel)
+        {
+            targetChannel = channel;
+            respondEphemerally = channel == command.Channel ? true : false;
+        }
+        else
+            targetChannel = (SocketTextChannel)command.Channel;
+
+        await SendNicknamePoll(targetChannel);
+        await command.RespondAsync($"Poll sent to <#{targetChannel.Id}>", ephemeral: respondEphemerally);
+    }
+
     private async Task HandleSetLogChannel(SocketSlashCommand command)
     {
         await command.DeferAsync();
@@ -774,7 +802,21 @@ public class Program
         return false;
     }
         
-    //  Assumes the interaction took place in a guild; returns an empty list otherwise
+    private async Task SendNicknamePoll(SocketTextChannel channel)
+    {
+        var confirmationButton = new ComponentBuilder()
+                .WithButton("Get Started", "start-nickname-process");
+            if (hasPermissionsToWriteChannel(channel))
+            {
+                await channel.SendMessageAsync($"To get started, press this button so we can set you up properly:", components: confirmationButton.Build());
+            }
+            else
+            {
+                await Log(new LogMessage(LogSeverity.Warning, nameof(SendNicknamePoll), $"Missing permissions to send nickname poll in channel {channel.Id} in guild {channel.Guild.Id}"));
+                await SendLogChannelMessageAsync(channel.Guild.Id, "Couldn't send nickname poll: missing permissions!");
+            }
+    }
+
     List<ApplicationCommandProperties> availableGuildCommands(SocketInteraction interaction)
     {
         if(interaction.GuildId is null)
