@@ -17,7 +17,6 @@ using Microsoft.IdentityModel.Tokens;
 public class Program
 {
     //  Before release:
-    //  TODO:   Ensure bot role outranks member and non-member roles
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
     //  TODO:   Check whether a user with a given character name already exists on the guild in question
     //  TODO:   Add CLI info command
@@ -797,10 +796,12 @@ public class Program
 
     private async Task HandleSetMemberRole(SocketSlashCommand command)
     {
-        if (_botDatabase.Guilds.Find(command.GuildId)?.Roles is not Roles roles)
+        await command.DeferAsync();
+
+        if ((await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId!))?.Roles is not Roles roles)
         {
             await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetMemberRole), $"No {nameof(Channels)} found for guild id {command.GuildId}"));
-            await command.RespondAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
+            await command.FollowupAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
             return;
         }
 
@@ -809,14 +810,23 @@ public class Program
         _botDatabase.SaveChanges();
 
         await Log(new LogMessage(LogSeverity.Info, nameof(HandleSetMemberRole), $"Member role set to {role?.Id} for guild {command.GuildId}"));
-        await command.RespondAsync($"Member role set to {role?.Mention}");
+        await command.FollowupAsync($"Member role set to {role?.Mention}");
+
+        SocketRole? botRole = _botclient.GetGuild((ulong)command.GuildId!).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged);
+        if (role?.Position > botRole?.Position)
+        {
+            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetMemberRole), $"Won't be able to give role {role.Id} to users in guild {command.GuildId}"));
+            await command.FollowupAsync($"The bot won't be able to give role {role.Mention} to users, because it outranks the bot's role. Please go to `Server Settings -> Roles` and make sure that the {botRole.Mention} role is higher on the list than the {role.Mention} role.", allowedMentions: AllowedMentions.None);
+    }
     }
     private async Task HandleSetNonMemberRole(SocketSlashCommand command)
     {
-        if (_botDatabase.Guilds.Find(command.GuildId)?.Roles is not Roles guildParameters)
+        await command.DeferAsync();
+
+        if ((await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId!))?.Roles is not Roles guildParameters)
         {
             await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetNonMemberRole), $"No {nameof(Channels)} found for guild id {command.GuildId}"));
-            await command.RespondAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
+            await command.FollowupAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
             return;
         }
 
@@ -825,7 +835,14 @@ public class Program
         _botDatabase.SaveChanges();
 
         await Log(new LogMessage(LogSeverity.Info, nameof(HandleSetNonMemberRole), $"Non-member role set to {role?.Id} for guild {command.GuildId}"));
-        await command.RespondAsync($"Non-member role set to {role?.Mention}");
+        await command.FollowupAsync($"Non-member role set to {role?.Mention}");
+
+        SocketRole? botRole = _botclient.GetGuild((ulong)command.GuildId!).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged);
+        if (role?.Position > botRole?.Position)
+        {
+            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetMemberRole), $"Won't be able to give role {role.Id} to users in guild {command.GuildId}"));
+            await command.FollowupAsync($"The bot won't be able to give role {role.Mention} to users, because it outranks the bot's role. Please go to `Server Settings -> Roles` and make sure that the {botRole.Mention} role is higher on the list than the {role.Mention} role.", allowedMentions: AllowedMentions.None);
+        }
     }
     private async Task HandleSetMainOutfit(SocketSlashCommand command)
     {
