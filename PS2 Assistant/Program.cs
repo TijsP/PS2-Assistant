@@ -18,7 +18,6 @@ public class Program
 {
     //  Before release:
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
-    //  TODO:   Check whether a user with a given character name already exists on the guild in question
     //  TODO:   Add CLI info command
 
     //  After release:
@@ -511,6 +510,16 @@ public class Program
             string? alias = playerData?.character_name_list[0].outfit.alias;
             if (socketModal.User is IGuildUser guildUser)
             {
+
+                //  Check whether a user with nickname already exists on the server, to prevent impersonation
+                if (guild.Users.Where(x => x.CharacterName == nickname && x.SocketUserId != socketModal.User.Id).FirstOrDefault(defaultValue: null) is User impersonatedUser)
+                {
+                    await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), $"Possible impersonation: user tried to set nickname to \"{nickname}\" in guild {socketModal.GuildId}, but that character already exists in that guild!"));
+                    await socketModal.FollowupAsync($"User {socketModal.User.Mention} tried to set his nickname to {nickname}, but user <@{impersonatedUser.SocketUserId}> already exists on the server! Incident reported...");
+                    await SendLogChannelMessageAsync((ulong)socketModal.GuildId, $"User {socketModal.User.Mention} tried to set nickname to \"{nickname}\", but that user already exists on this server (<@{impersonatedUser.SocketUserId}>)");
+                    return;
+                }
+
                 try
                 {
                     //  Assign Discord nickname and member/non-member role
