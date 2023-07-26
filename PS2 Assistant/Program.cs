@@ -18,11 +18,15 @@ public class Program
 {
     //  Before release:
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
-    //  TODO:   Add CLI info command
+    //  TODO:   Add CLI bot info command
+    //  TODO:   Add CLI command for database connect/disconnect and location
+    //  TODO:   Add CLI database info command
+    //  TODO:   Send Log() messages to file (in addition to CLI)
     //  TODO:   Annotate entire codebase
 
     //  After release:
     //  TODO:   Periodically check and update outfit tag of members (and update in User table
+    //  TODO:   Add "Clear" option to set-main-outfit to reset main outfit tag
     //  TODO:   Send message upon bot joining guild
     //  TODO:   Remove "Get started" message after user has been set up?
     //  TODO:   Add "Welcome to outfit" message in Welcome channel when user switches outfit
@@ -167,6 +171,14 @@ public class Program
             .AddOption("channel", ApplicationCommandOptionType.Channel, "The channel in which the poll will be sent");
         globalApplicationCommandProperties.Add(commandSendNicknamePoll .Build());
 
+        var commandSendWelcomeMessage = new SlashCommandBuilder()
+            .WithName("send-welcome-message")
+            .WithDescription("Send a welcome message when a new user joins the server")
+            .WithDMPermission(false)
+            .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
+            .AddOption("welcome", ApplicationCommandOptionType.Boolean, "Whether a welcome should be sent or not", isRequired: true);
+        globalApplicationCommandProperties.Add(commandSendWelcomeMessage.Build());
+
         var commandIncludeNicknamePollInWelcomeMessage = new SlashCommandBuilder()
             .WithName("include-nickname-poll")
             .WithDescription("Includes a nickname poll in the welcome message when a new user joins")
@@ -263,14 +275,15 @@ public class Program
     {
         await SendLogChannelMessageAsync(user.Guild.Id, $"User {user.Mention} joined the server");
 
-        if ((await _botDatabase.getGuildByGuildIdAsync(user.Guild.Id))?.Channels?.WelcomeChannel is ulong welcomeChannelId)
+        if (await _botDatabase.getGuildByGuildIdAsync(user.Guild.Id) is Guild guild && guild.Channels?.WelcomeChannel is ulong welcomeChannelId)
         {
             var confirmationButton = new ComponentBuilder()
                 .WithButton("Get Started", "start-nickname-process");
             if (HasPermissionsToWriteChannel((SocketGuildChannel)_botclient.GetChannel(welcomeChannelId)))
             {
+                if(guild.SendWelcomeMessage is true)
                 await ((SocketTextChannel)_botclient.GetChannel(welcomeChannelId)).SendMessageAsync($"Welcome, {user.Mention}!");
-                if(_botDatabase.Guilds.Find(user.Guild.Id)?.askNicknameUponWelcome is true)
+                if(guild.AskNicknameUponWelcome is true)
                 await SendNicknamePoll((SocketTextChannel)_botclient.GetChannel(welcomeChannelId));
             }
             else
@@ -387,6 +400,9 @@ public class Program
                 break;
             case "send-nickname-poll":
                 await HandleSendNicknamePoll(command);
+                break;
+            case "send-welcome-message":
+                await HandleSendWelcomeMessage(command);
                 break;
             case "include-nickname-poll":
                 await HandleIncludeNicknamePoll(command);
@@ -732,12 +748,23 @@ public class Program
         await command.RespondAsync($"Poll sent to <#{targetChannel.Id}>", ephemeral: respondEphemerally);
     }
 
+    private async Task HandleSendWelcomeMessage(SocketSlashCommand command)
+    {
+        if(command.Data.Options.First().Value is bool sendWelcomeMessage && _botDatabase.Guilds.Find(command.GuildId) is Guild guild)
+        {
+            guild.SendWelcomeMessage = sendWelcomeMessage;
+            await _botDatabase.SaveChangesAsync();
+            await Log(new LogMessage(LogSeverity.Info, nameof(HandleSendWelcomeMessage), $"Welcome messages will {(sendWelcomeMessage ? "now" : "not")} be sent to guild {guild.GuildId}"));
+            await command.RespondAsync($"Welcome messages will {(sendWelcomeMessage ? "now" : "not")} be sent");
+        }
+    }
+
     private async Task HandleIncludeNicknamePoll(SocketSlashCommand command)
     {
         await command.DeferAsync();
         if (_botDatabase.Guilds.Find(command.GuildId) is Guild guild && command.Data.Options.First().Value is bool include)
         {
-            guild.askNicknameUponWelcome = include;
+            guild.AskNicknameUponWelcome = include;
             await command.FollowupAsync($"Welcome messages will {(include ? "" : "not")} include a nickname poll");
             _botDatabase.SaveChanges();
         }

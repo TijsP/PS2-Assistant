@@ -10,6 +10,7 @@ public class Guild
     public Roles? Roles { get; set; }
     public ICollection<User> Users { get; } = new List<User>();
     public string? OutfitTag { get; set; }
-    public bool? askNicknameUponWelcome { get; set; }
+    public bool AskNicknameUponWelcome { get; set; } = false;
+    public bool SendWelcomeMessage { get; set; } = false;
 }
 
