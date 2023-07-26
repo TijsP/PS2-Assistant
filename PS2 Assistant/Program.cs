@@ -19,13 +19,13 @@ public class Program
     //  Before release:
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
     //  TODO:   Add CLI info command
+    //  TODO:   Annotate entire codebase
 
     //  After release:
     //  TODO:   Periodically check and update outfit tag of members (and update in User table
     //  TODO:   Send message upon bot joining guild
     //  TODO:   Remove "Get started" message after user has been set up?
     //  TODO:   Add "Welcome to outfit" message in Welcome channel when user switches outfit
-    //  TODO:   Annotate entire codebase
     //  TODO:   Check for bot permissions upon joining guild
     //  TODO:   Add service to BotContext?
     //  TODO:   Convert to use Interaction Framework?
@@ -159,7 +159,6 @@ public class Program
             .AddOption("page", ApplicationCommandOptionType.Integer, "The page number to display", minValue: 1)
             .AddOption("setup", ApplicationCommandOptionType.Boolean, "Explain how to set up the bot on a server")
             .AddOption("command", ApplicationCommandOptionType.String, "Get help for a specific command", isAutocomplete: true);
-        guildApplicationCommandProperties.Add(commandHelp.Build());
         globalApplicationCommandProperties.Add(commandHelp.Build());
 
         var commandSendNicknamePoll = new SlashCommandBuilder()
@@ -167,7 +166,6 @@ public class Program
             .WithDescription("Manually sends a poll that asks users for their in-game character name")
             .WithDMPermission(false)
             .AddOption("channel", ApplicationCommandOptionType.Channel, "The channel in which the poll will be sent");
-        guildApplicationCommandProperties.Add(commandSendNicknamePoll.Build());
         globalApplicationCommandProperties.Add(commandSendNicknamePoll .Build());
 
         var commandIncludeNicknamePollInWelcomeMessage = new SlashCommandBuilder()
@@ -176,7 +174,6 @@ public class Program
             .WithDMPermission(false)
             .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("include", ApplicationCommandOptionType.Boolean, "Whether to include the poll or not", isRequired: true);
-        guildApplicationCommandProperties.Add(commandIncludeNicknamePollInWelcomeMessage.Build());
         globalApplicationCommandProperties.Add(commandIncludeNicknamePollInWelcomeMessage.Build());
 
         var commandSetLogChannel = new SlashCommandBuilder()
@@ -185,7 +182,6 @@ public class Program
             .WithDMPermission(false)
             .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("log-channel", ApplicationCommandOptionType.Channel, "Sets the log channel", isRequired: true);
-        guildApplicationCommandProperties.Add(commandSetLogChannel.Build());
         globalApplicationCommandProperties.Add(commandSetLogChannel.Build());
 
         var commandSetWelcomeChannel = new SlashCommandBuilder()
@@ -194,7 +190,6 @@ public class Program
             .WithDMPermission(false)
             .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("welcome-channel", ApplicationCommandOptionType.Channel, "Sets the welcome channel", isRequired: true);
-        guildApplicationCommandProperties.Add(commandSetWelcomeChannel.Build());
         globalApplicationCommandProperties.Add(commandSetWelcomeChannel.Build());
 
         var commandSetMemberRole = new SlashCommandBuilder()
@@ -203,7 +198,6 @@ public class Program
             .WithDMPermission(false)
             .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("member-role", ApplicationCommandOptionType.Role, "Sets the member role", isRequired: true);
-        guildApplicationCommandProperties.Add(commandSetMemberRole.Build());
         globalApplicationCommandProperties.Add(commandSetMemberRole.Build());
 
         var commandSetNonMemberRole = new SlashCommandBuilder()
@@ -212,7 +206,6 @@ public class Program
             .WithDMPermission(false)
             .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("non-member-role", ApplicationCommandOptionType.Role, "Sets the non-member role", isRequired: true);
-        guildApplicationCommandProperties.Add(commandSetNonMemberRole.Build());
         globalApplicationCommandProperties.Add(commandSetNonMemberRole.Build());
 
         var commandSetMainOutfit = new SlashCommandBuilder()
@@ -221,8 +214,9 @@ public class Program
             .WithDMPermission(false)
             .WithDefaultMemberPermissions(GuildPermission.ManageGuild)
             .AddOption("outfit-tag", ApplicationCommandOptionType.String, "The tag of the outfit", isRequired: true, minLength: 1, maxLength: 4);
-        guildApplicationCommandProperties.Add(commandSetMainOutfit.Build());
         globalApplicationCommandProperties.Add(commandSetMainOutfit.Build());
+
+        //  Test commands
 
         var commandTest = new SlashCommandBuilder()
             .WithName("test-command")
@@ -230,9 +224,7 @@ public class Program
             .AddOption("required-parameter", ApplicationCommandOptionType.Boolean, "test required parameters", isRequired: true)
             .AddOption("optional-parameter", ApplicationCommandOptionType.Boolean, "test optional parameters", isRequired: false)
             .AddOption("unspecified-parameter", ApplicationCommandOptionType.Boolean, "test unspecified parameters");
-        globalApplicationCommandProperties.Add(commandTest.Build());
-
-        //  Test commands
+        guildApplicationCommandProperties.Add(commandTest.Build());
 
         var guildCommandTestUserJoined = new SlashCommandBuilder()
             .WithName("test-user-join")
@@ -251,6 +243,8 @@ public class Program
             .WithDescription("Test the LeftGuildHandler function")
             .WithDMPermission(false);
         guildApplicationCommandProperties.Add(guildCommandTestLeftGuild.Build());
+
+        guildApplicationCommandProperties.AddRange(globalApplicationCommandProperties);
 
         try
         {
