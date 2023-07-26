@@ -13,6 +13,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1050:Declare types in namespaces", Justification = "Program will not be used as a library")]
 public class Program
 {
     //  Before release:
@@ -33,18 +34,18 @@ public class Program
     //  FIX:    ModalSubmitted handler is blocking the gateway task (wait for PR https://github.com/discord-net/Discord.Net/pull/2722)
     //  TODO:   Implement SendChannelMessage(guildId, channelId, message, [CallerMemberName] caller)
 
-    public static Task Main(string[] args) => new Program().MainAsync();
+    public static Task Main() => new Program().MainAsync();
 
     private bool stopBot = false;
     private bool clientIsReady = false;
-    private DiscordSocketClient _botclient = new DiscordSocketClient(new DiscordSocketConfig { GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildMembers });
-    private HttpClient _censusclient = new();
-    private ulong _guildID = 325905696652787713;
-    private rResponse? apiResponse;
-    private JsonSerializerOptions defaultCensusJsonDeserializeOptions = new JsonSerializerOptions { NumberHandling = JsonNumberHandling.AllowReadingFromString, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    private readonly DiscordSocketClient _botclient = new( new DiscordSocketConfig { GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildMembers });
+    private readonly HttpClient _censusclient = new();
+    private readonly ulong testGuildID = 325905696652787713;
+    private readonly rResponse? apiResponse;
+    private readonly JsonSerializerOptions defaultCensusJsonDeserializeOptions = new() { NumberHandling = JsonNumberHandling.AllowReadingFromString, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     private readonly IConfiguration appSettings = new ConfigurationBuilder().AddJsonFile("appsettings.json").SetBasePath(Environment.CurrentDirectory).Build();
-    private BotContext _botDatabase = new BotContext();
+    private readonly BotContext _botDatabase = new();
 
     public async Task MainAsync()
     {
@@ -53,7 +54,7 @@ public class Program
         _botclient.Ready += Client_Ready;
         _botclient.SlashCommandExecuted += SlashCommandHandler;
         _botclient.AutocompleteExecuted += AutocompleteExecutedHandler;
-        //_botclient.SelectMenuExecuted += MenuHandler;
+        _botclient.SelectMenuExecuted += MenuHandler;
         _botclient.UserJoined += UserJoined;
         _botclient.UserLeft += UserLeftHandler;
         _botclient.ButtonExecuted += ButtonExecutedHandler;
@@ -105,10 +106,10 @@ public class Program
         await _botclient.StopAsync();
     }
 
-    List<ApplicationCommandProperties> globalApplicationCommandProperties = new();
+    readonly List<ApplicationCommandProperties> globalApplicationCommandProperties = new();
     public async Task Client_Ready()
     {
-        SocketGuild guild = _botclient.GetGuild(_guildID);
+        SocketGuild guild = _botclient.GetGuild(testGuildID);
 
         List<ApplicationCommandProperties> guildApplicationCommandProperties = new();
 
@@ -275,7 +276,7 @@ public class Program
         {
             var confirmationButton = new ComponentBuilder()
                 .WithButton("Get Started", "start-nickname-process");
-            if (hasPermissionsToWriteChannel((SocketGuildChannel)_botclient.GetChannel(welcomeChannelId)))
+            if (HasPermissionsToWriteChannel((SocketGuildChannel)_botclient.GetChannel(welcomeChannelId)))
             {
                 await ((SocketTextChannel)_botclient.GetChannel(welcomeChannelId)).SendMessageAsync($"Welcome, {user.Mention}!");
                 if(_botDatabase.Guilds.Find(user.Guild.Id)?.askNicknameUponWelcome is true)
@@ -452,8 +453,8 @@ public class Program
 
     private async Task HandleHelpCommandOptionAutocomplete(SocketAutocompleteInteraction interaction)
     {
-        List<ApplicationCommandProperties> propertiesList = availableGuildCommands(interaction);
-        List<AutocompleteResult> results = new List<AutocompleteResult>();
+        List<ApplicationCommandProperties> propertiesList = AvailableGuildCommands(interaction);
+        List<AutocompleteResult> results = new();
 
         foreach (ApplicationCommandProperties properties in propertiesList)
         {
@@ -631,11 +632,11 @@ public class Program
 
     private async Task HandleHelp(SocketSlashCommand command)
     {
-        bool noOptionsSpecified = command.Data.Options.Count == 0 ? true : false;
+        bool noOptionsSpecified = command.Data.Options.Count == 0;
         int commandsPerPage = 4;
         int startingPage = 0;
         //  x.DefaultMemberPermissions are AND'ed together. When the result of an AND between x.Permissions and p is more than one, we know the user has at least one of the permission required for the command
-        List<ApplicationCommandProperties> availableCommands = availableGuildCommands(command);
+        List<ApplicationCommandProperties> availableCommands = AvailableGuildCommands(command);
         int totalPages = (int)Math.Ceiling((double)availableCommands.Count / commandsPerPage);
 
         //  Only one entry for each option can exist
@@ -650,7 +651,7 @@ public class Program
 
             startingPage = (int)requestedPage - 1;
 
-        List<Embed> embeds = new List<Embed>();
+        List<Embed> embeds = new();
 
             for (int i = startingPage * commandsPerPage; i < availableCommands.Count; i++)
         {
@@ -676,7 +677,7 @@ public class Program
             {
                 var embed = CommandHelpEmbed(slashCommand);
                 await command.RespondAsync(embed: embed.Build());
-            }else if((SlashCommandProperties)globalApplicationCommandProperties.Where(x => x.Name.Value.ToLower() == requestedCommand.ToLower()).FirstOrDefault(defaultValue: null)! is SlashCommandProperties)
+            }else if((SlashCommandProperties)globalApplicationCommandProperties.Where(x => x.Name.Value.ToLower() == requestedCommand.ToLower()).FirstOrDefault(defaultValue: null)! is not null)
             {
                 await command.RespondAsync($"You don't have the right permissions to execute command `/{requestedCommand}`");
             }
@@ -686,7 +687,7 @@ public class Program
             }
         }
     }
-    private EmbedBuilder CommandHelpEmbed(SlashCommandProperties slashCommand)
+    private static EmbedBuilder CommandHelpEmbed(SlashCommandProperties slashCommand)
     {
             string description = (string)slashCommand.Description;
             var embed = new EmbedBuilder()
@@ -721,7 +722,7 @@ public class Program
         if (!command.Data.Options.IsNullOrEmpty() && command.Data.Options.First().Value is SocketTextChannel channel)
         {
             targetChannel = channel;
-            respondEphemerally = channel == command.Channel ? true : false;
+            respondEphemerally = channel == command.Channel;
         }
         else
             targetChannel = (SocketTextChannel)command.Channel;
@@ -765,7 +766,7 @@ public class Program
 
         await Log(new LogMessage(LogSeverity.Info, nameof(HandleSetLogChannel), $"Log channel set to {channel.Id} for guild {command.GuildId}"));
         await command.FollowupAsync($"Log channel set to <#{channel.Id}>");
-        if(!hasPermissionsToWriteChannel(channel))
+        if(!HasPermissionsToWriteChannel(channel))
         {
             await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetLogChannel), $"Bot doesn't have the right permissions to post in channel {channel.Id} in guild {command.GuildId}"));
             await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
@@ -787,7 +788,7 @@ public class Program
 
         await Log(new LogMessage(LogSeverity.Info, nameof(HandleSetWelcomeChannel), $"Welcome channel set to {channel.Id} for guild {command.GuildId}"));
         await command.RespondAsync($"Welcome channel set to <#{channel.Id}>");
-        if (!hasPermissionsToWriteChannel(channel))
+        if (!HasPermissionsToWriteChannel(channel))
         {
             await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetWelcomeChannel), $"Bot doesn't have the right permissions to post in channel {channel.Id} in guild {command.GuildId}"));
             await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
@@ -862,14 +863,14 @@ public class Program
         _botDatabase.SaveChanges();
     }
 
-    private bool hasOutfitTagConfigured(ulong? guildId)
+    private bool HasOutfitTagConfigured(ulong? guildId)
     {
         if (guildId is null || _botDatabase.Guilds.Find(guildId)?.OutfitTag is null)
             return false;
         return true;
     }
 
-    private bool hasPermissionsToWriteChannel(SocketGuildChannel channel)
+    private bool HasPermissionsToWriteChannel(SocketGuildChannel channel)
     {
         SocketRole role = _botclient.GetGuild(channel.Guild.Id).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)!;     //  Bots always have a managed role of their own
         SocketRole everyoneRole = channel.Guild.EveryoneRole;
@@ -886,7 +887,7 @@ public class Program
     {
         var confirmationButton = new ComponentBuilder()
                 .WithButton("Get Started", "start-nickname-process");
-            if (hasPermissionsToWriteChannel(channel))
+            if (HasPermissionsToWriteChannel(channel))
             {
                 await channel.SendMessageAsync($"To get started, press this button so we can set you up properly:", components: confirmationButton.Build());
             }
@@ -897,7 +898,7 @@ public class Program
             }
     }
 
-    List<ApplicationCommandProperties> availableGuildCommands(SocketInteraction interaction)
+    List<ApplicationCommandProperties> AvailableGuildCommands(SocketInteraction interaction)
     {
         if(interaction.GuildId is null)
             return new List<ApplicationCommandProperties>();
@@ -906,7 +907,7 @@ public class Program
 
     private async Task SendLogChannelMessageAsync(ulong guildId, string message, [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
-        if ((await _botDatabase.getGuildByGuildIdAsync(guildId))?.Channels?.LogChannel is ulong logChannelId && _botclient.GetGuild(guildId).GetChannel(logChannelId) is SocketTextChannel logChannel && hasPermissionsToWriteChannel(logChannel))
+        if ((await _botDatabase.getGuildByGuildIdAsync(guildId))?.Channels?.LogChannel is ulong logChannelId && _botclient.GetGuild(guildId).GetChannel(logChannelId) is SocketTextChannel logChannel && HasPermissionsToWriteChannel(logChannel))
             await logChannel.SendMessageAsync(message);
         else
             await Log(new LogMessage(LogSeverity.Warning, caller, $"Failed to send log message to in guild {guildId}. Has the LogChannel been set up properly?"));
@@ -919,30 +920,29 @@ public class Program
     }
 }
 
+#pragma warning disable IDE1006 // Naming Styles
 record rPromotableMemberParams(
     string outfit,
     int minActivity,
     int? maxInactivity
     );
 
-public record rResponse
-{
-    public rPlayerData[] outfit_member_extended_list { get; set; }
-    public int returned { get; set; }
-}
+record rResponse(
+    rPlayerData[] outfit_member_extended_list,
+    int returned
+    );
 
-public record rReturnedOutfitData
-{
-    public rOutfitData[] outfit_list { get; set; }
-    public int returned { get; set; }
-}
+record rReturnedOutfitData(
+    rOutfitData[] outfit_list,
+    int returned
+    );
 
-public record rReturnedPlayerDataLight(
+record rReturnedPlayerDataLight(
     rPlayerDataLight[] character_name_list,
     int? returned
     );
 
-public record rOutfitData(
+record rOutfitData(
     ulong? outfit_id,
     string? alias,
     string? alias_lower,
@@ -956,7 +956,7 @@ public record rOutfitData(
         );
 }
 
-public record rPlayerData(
+record rPlayerData(
     ulong? character_id,
     ulong? member_since,
     string? member_since_date,
@@ -966,18 +966,19 @@ public record rPlayerData(
     rCharacterName? character_id_join_character_name
     );
 
-public record rCharacterName(
+record rCharacterName(
         ulong? character_id,
         rName? name
         );
 
-public record rName(
+record rName(
     string? first,
     string? first_lower
     );
 
-public record rPlayerDataLight(
+record rPlayerDataLight(
     ulong character_id,
     rName name,
     rOutfitData outfit
     );
+#pragma warning restore IDE1006 // Naming Styles
