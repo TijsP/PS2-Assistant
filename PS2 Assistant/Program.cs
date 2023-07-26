@@ -104,12 +104,11 @@ public class Program
         await _botclient.StopAsync();
     }
 
+    readonly List<ApplicationCommandProperties> guildApplicationCommandProperties = new();
     readonly List<ApplicationCommandProperties> globalApplicationCommandProperties = new();
     public async Task Client_Ready()
     {
         SocketGuild guild = _botclient.GetGuild(testGuildID);
-
-        List<ApplicationCommandProperties> guildApplicationCommandProperties = new();
 
         var guildCommandPing = new SlashCommandBuilder();
         guildCommandPing.WithName("ping");
@@ -445,7 +444,7 @@ public class Program
 
     private async Task HandleHelpCommandOptionAutocomplete(SocketAutocompleteInteraction interaction)
     {
-        List<ApplicationCommandProperties> propertiesList = AvailableGuildCommands(interaction);
+        List<ApplicationCommandProperties> propertiesList = CommandsAvailableToUser(interaction);
         List<AutocompleteResult> results = new();
 
         foreach (ApplicationCommandProperties properties in propertiesList)
@@ -638,7 +637,7 @@ public class Program
         int commandsPerPage = 4;
         int startingPage = 0;
         //  x.DefaultMemberPermissions are AND'ed together. When the result of an AND between x.Permissions and p is more than one, we know the user has at least one of the permission required for the command
-        List<ApplicationCommandProperties> availableCommands = AvailableGuildCommands(command);
+        List<ApplicationCommandProperties> availableCommands = CommandsAvailableToUser(command);
         int totalPages = (int)Math.Ceiling((double)availableCommands.Count / commandsPerPage);
 
         //  Only one entry for each option can exist
@@ -918,11 +917,17 @@ public class Program
             }
     }
 
-    List<ApplicationCommandProperties> AvailableGuildCommands(SocketInteraction interaction)
+    List<ApplicationCommandProperties> CommandsAvailableToUser(SocketInteraction interaction)
     {
+        List<ApplicationCommandProperties> commands = interaction.GuildId == testGuildID ? guildApplicationCommandProperties : globalApplicationCommandProperties;
         if(interaction.GuildId is null)
             return new List<ApplicationCommandProperties>();
-        return globalApplicationCommandProperties.Where(x => { if (x.DefaultMemberPermissions.IsSpecified) return _botclient.GetGuild((ulong)interaction.GuildId!).GetUser(interaction.User.Id).GuildPermissions.Has(x.DefaultMemberPermissions.Value); else return true; }).ToList();
+        return commands.Where(x => {
+            if (x.DefaultMemberPermissions.IsSpecified)
+                return _botclient.GetGuild((ulong)interaction.GuildId!).GetUser(interaction.User.Id).GuildPermissions.Has(x.DefaultMemberPermissions.Value);
+            else
+                return true;
+        }).ToList();
     }
 
     private async Task SendLogChannelMessageAsync(ulong guildId, string message, [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
