@@ -12,14 +12,14 @@ using Newtonsoft.Json.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using System.Diagnostics;
 
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1050:Declare types in namespaces", Justification = "Program will not be used as a library")]
 public class Program
 {
     //  Before release:
+    //  TODO:   Fix HasPermissionsToWrite failing when public channel is created while bot is online
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
-    //  TODO:   Add CLI bot info command
-    //  TODO:   Add CLI command for database connect/disconnect and location
     //  TODO:   Add CLI database info command
     //  TODO:   Send Log() messages to file (in addition to CLI)
     //  TODO:   Annotate entire codebase
@@ -100,10 +100,18 @@ public class Program
         //  Handle command line input
         while (!stopBot)
         {
-            if (Console.ReadLine() == "stop")
+            switch (Console.ReadLine())
+            {
+                case "stop":
                 stopBot = true;
-            else
+                    break;
+                case "info":
+                    await Console.Out.WriteLineAsync(await CLIInfo());
+                    break;
+                default:
                 await Console.Out.WriteLineAsync("command not recognized");
+                    break;
+        }
         }
         await _botclient.StopAsync();
     }
@@ -969,6 +977,24 @@ public class Program
     {
         Console.WriteLine(message.ToString());
         return Task.CompletedTask;
+    }
+
+    private async Task<string> CLIInfo()
+    {
+        List<SocketGuild> guilds = _botclient.Guilds.ToList();
+        int accumulativeUserCount = 0;
+        foreach (SocketGuild guild in guilds)
+        {
+            accumulativeUserCount += guild.Users.Count;
+        }
+
+        string returnString =
+             "PS2 Assistant bot info:\n" +
+            $"| Connected guilds:       {_botclient.Guilds.Count}\n" +
+            $"| Recommended shards:     {await _botclient.GetRecommendedShardCountAsync()}\n" +
+            $"| Accumulative users:     {accumulativeUserCount}\n" +
+            $"| Bot running for:        {DateTime.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime()}";
+        return returnString;
     }
 }
 
