@@ -4,8 +4,7 @@ using PS2_Assistant.Models;
 namespace PS2_Assistant.Data;
 public class BotContext : DbContext
 {
-    //public BotContext(DbContextOptions<BotContext> options) : base(options) { }
-
+    public readonly string dbLocation = "Assistant.db";
     public DbSet<Guild> Guilds => Set<Guild>();
 
     public async Task<Guild?> getGuildByGuildIdAsync(ulong guildId)
@@ -19,8 +18,7 @@ public class BotContext : DbContext
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        //base.OnConfiguring(optionsBuilder);
-        optionsBuilder.UseSqlite("Data Source=Assistant.db");
+        optionsBuilder.UseSqlite("Data Source=" + dbLocation);
     }
 }
 

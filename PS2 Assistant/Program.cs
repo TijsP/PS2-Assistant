@@ -20,11 +20,11 @@ public class Program
     //  Before release:
     //  TODO:   Fix HasPermissionsToWrite failing when public channel is created while bot is online
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
-    //  TODO:   Add CLI database info command
     //  TODO:   Send Log() messages to file (in addition to CLI)
     //  TODO:   Annotate entire codebase
 
     //  After release:
+    //  TODO:   Add confirmation check for stop command
     //  TODO:   Periodically check and update outfit tag of members (and update in User table
     //  TODO:   Add "Clear" option to set-main-outfit to reset main outfit tag
     //  TODO:   Send message upon bot joining guild
@@ -100,17 +100,60 @@ public class Program
         //  Handle command line input
         while (!stopBot)
         {
-            switch (Console.ReadLine())
+            if (Console.ReadLine() is string fullCommand)
             {
-                case "stop":
+                if (fullCommand.StartsWith("help"))
+                    await Console.Out.WriteLineAsync( "\nList of commands:\n" +
+                                                        "help:      displays a list of commands\n" +
+                                                        "stop:      stops the program\n" +
+                                                        "info:      returns information about the bot status\n" +
+                                                        "db-info:   returns information about the database (use \"db-info help\" for more information)");
+                else if (fullCommand.StartsWith("stop"))
                 stopBot = true;
-                    break;
-                case "info":
+                else if (fullCommand.StartsWith("info"))
                     await Console.Out.WriteLineAsync(await CLIInfo());
-                    break;
-                default:
-                await Console.Out.WriteLineAsync("command not recognized");
-                    break;
+                else if (fullCommand.StartsWith("db-info"))
+                {
+                    bool list = false;
+                    ulong? id = null;
+                    bool guildNotFound = false;
+                    fullCommand = fullCommand.Trim("db-info ".ToCharArray());
+
+                    try
+                    {
+                        if (fullCommand.StartsWith("list"))
+                            list = true;
+                        else if (fullCommand.StartsWith("help"))
+                        {
+                            await Console.Out.WriteLineAsync( "\nUsage: db-info [list] [help] [guildId]\n" +
+                                                                "   list:       include \"list\" to get a list of all guilds registered in the database\n" +
+                                                                "   help:       include \"help\" to display the help page of this command\n" +
+                                                                "   guildId:    specify a guild ID to get all data in the database related to that guild\n" +
+                                                                "   none:       returns information about the database itself");
+                            continue;
+                        }
+                        else if (!fullCommand.IsNullOrEmpty())
+                        {
+                            id = ulong.Parse(fullCommand);
+                            if (!_botDatabase.Guilds.Any(x => x.GuildId == id))
+                                guildNotFound = true;
+                        }
+                    }
+                    catch
+                    {
+                        guildNotFound = true;
+                    }
+
+                    if (guildNotFound)
+                    {
+                        await Console.Out.WriteLineAsync($"No guild found in database with ID {fullCommand}");
+                        continue;
+                    }
+
+                    await Console.Out.WriteLineAsync(await CLIDatabaseInfo(list, id));
+                }
+                else
+                    await Console.Out.WriteLineAsync($"command not recognized: {fullCommand}. Use \"help\" for a list of commands");
         }
         }
         await _botclient.StopAsync();
@@ -989,12 +1032,94 @@ public class Program
         }
 
         string returnString =
-             "PS2 Assistant bot info:\n" +
+             "\nPS2 Assistant bot info:\n" +
             $"| Connected guilds:       {_botclient.Guilds.Count}\n" +
             $"| Recommended shards:     {await _botclient.GetRecommendedShardCountAsync()}\n" +
             $"| Accumulative users:     {accumulativeUserCount}\n" +
             $"| Bot running for:        {DateTime.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime()}";
         return returnString;
+    }
+
+    private async Task<string> CLIDatabaseInfo(bool list = false, ulong? guildId = null)
+    {
+        string guildIdLabel = "Guild ID",
+            guildNameLabel = "Guild name",
+            guildMembersLabel = "Guild Members",
+            tagLabel = "Outfit Tag",
+            sendWelcomeLabel = "Send welcome message",
+            sendNicknameLabel = "Send nickname poll",
+            welcomeChannelLabel = "Welcome channel ID",
+            logChannelLabel = "Log channel ID",
+            memberRoleLabel = "Member role ID",
+            nonMemberRoleLabel = "Non-member role ID",
+            userLabel = "User ID",
+            userOutfitLabel = "Current outfit",
+            characterLabel = "Character name";
+
+        string returnString = "\nPS2 Assistant database info:\n";
+
+        if (list)
+        {
+            //  Get the longest ID, to ensure all entries share the same column width
+            int longestGuildIdLength = 0;
+            foreach(Guild guild in _botDatabase.Guilds)
+                longestGuildIdLength = guild.GuildId.ToString().Length > longestGuildIdLength ? guild.GuildId.ToString().Length : longestGuildIdLength;
+
+            //  Header
+            returnString += $"| {CLIColumn(guildIdLabel, longestGuildIdLength)} {CLIColumn(guildMembersLabel, guildMembersLabel.Length)} {CLIColumn(guildNameLabel, guildNameLabel.Length)}";
+            returnString = returnString.Remove(returnString.Length - 2) + "\n";     //  Get rid of the last " |" for a cleaner look
+            
+            //  Body
+            foreach (Guild guild in _botDatabase.Guilds)
+                returnString += $"| {CLIColumn(guild.GuildId.ToString(), longestGuildIdLength)} {CLIColumn((_botclient.GetGuild(guild.GuildId).MemberCount - 1).ToString(), guildMembersLabel.Length)} {_botclient.GetGuild(guild.GuildId).Name}\n";
+        }
+        else if (guildId is not null && await _botDatabase.getGuildByGuildIdAsync((ulong)guildId) is Guild guild)
+        {
+            //  Guild, channels and roles table headers and bodies
+            returnString +=
+                $"| {CLIColumn(guildIdLabel, guildId.ToString()!.Length)} {CLIColumn(tagLabel, tagLabel.Length)} {CLIColumn(sendWelcomeLabel, sendWelcomeLabel.Length)} {CLIColumn(sendNicknameLabel, sendNicknameLabel.Length)}\n" +
+                $"| {guildId} | {CLIColumn(guild.OutfitTag, tagLabel.Length)} {CLIColumn(guild.SendWelcomeMessage.ToString(), sendWelcomeLabel.Length)} {CLIColumn(guild.AskNicknameUponWelcome.ToString(), sendNicknameLabel.Length)}\n" +
+                 "\n" +
+                $"| {CLIColumn(welcomeChannelLabel, guild.Channels?.WelcomeChannel.ToString()?.Length)} {CLIColumn(logChannelLabel, guild.Channels?.LogChannel.ToString()?.Length)}\n" +
+                $"| {CLIColumn(guild.Channels?.WelcomeChannel.ToString(), guild.Channels?.WelcomeChannel.ToString()?.Length)} {CLIColumn(guild.Channels?.LogChannel.ToString(), guild.Channels?.LogChannel.ToString()?.Length)}\n" +
+                 "\n" +
+                $"| {CLIColumn(memberRoleLabel, guild.Roles?.MemberRole.ToString()?.Length)} {CLIColumn(nonMemberRoleLabel, guild.Roles?.NonMemberRole.ToString()?.Length)}\n" +
+                $"| {CLIColumn(guild.Roles?.MemberRole.ToString(), guild.Roles?.MemberRole.ToString()?.Length)} {CLIColumn(guild.Roles?.NonMemberRole.ToString(), guild.Roles?.NonMemberRole.ToString()?.Length)}\n" +
+                 "\n";
+
+            //  Get the longest ID, to ensure all entries share the same column width
+            int longestUserIdLength = 0;
+            foreach (User user in guild.Users)
+                longestUserIdLength = user.SocketUserId.ToString().Length > longestUserIdLength ? user.SocketUserId.ToString().Length : longestUserIdLength;
+
+            //  Users header
+            returnString += $"| {CLIColumn(userLabel, longestUserIdLength)} {CLIColumn(userOutfitLabel, userOutfitLabel.Length)} {CLIColumn(characterLabel, 32)}\n";      //  Planetside doesn't allow character names with a length of more than 32 characters
+            
+            //  Users body
+            foreach (User user in guild.Users)
+            {
+                returnString += $"| {CLIColumn(user.SocketUserId.ToString(), longestUserIdLength)} {CLIColumn(user.CurrentOutfit, userOutfitLabel.Length)} {CLIColumn(user.CharacterName, 32)}";
+            }
+        }
+        else
+        {
+            string dbPath = Path.GetFullPath(_botDatabase.dbLocation);
+            returnString +=
+                $"| Database file location: {dbPath}\n" +
+                $"| Database storage size:  {decimal.Round(new FileInfo(dbPath).Length / (decimal)1024, 2):0.00} KiB\n" +
+                $"| Guilds in database:     {await _botDatabase.Guilds.CountAsync()}\n" +
+                $"| Registered users:       {await _botDatabase.Guilds.SelectMany(x => x.Users).CountAsync()}";
+        }
+
+        return returnString;
+    }
+
+    private string CLIColumn(string? content, int? width)
+    {
+        width ??= 0;
+        if (!content.IsNullOrEmpty() && content!.Length > width)
+                width = content.Length;
+        return $"{content}{new string(' ', content.IsNullOrEmpty() ? width.Value : width.Value - content!.Length)} |";
     }
 }
 
