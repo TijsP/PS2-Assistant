@@ -31,7 +31,6 @@ public class Program
 {
     //  Before release:
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
-    //  TODO:   Add appsettings.Development.json for verbose logging
 
     //  After release:
     //  TODO:   Annotate entire codebase
@@ -50,6 +49,7 @@ public class Program
     //  FIX:    ModalSubmitted handler is blocking the gateway task (wait for PR https://github.com/discord-net/Discord.Net/pull/2722)
     //  TODO:   Implement SendChannelMessage(guildId, channelId, message, [CallerMemberName] caller)
     //  TODO: Logging user ID potential GDPR violation?
+    //  TODO:   Add appsettings.Development.json for verbose logging (with separate discord bot token?)
 
     public static Task Main() => new Program().MainAsync();
 
@@ -253,9 +253,20 @@ public class Program
         var commandHelp = new SlashCommandBuilder()
             .WithName("help")
             .WithDescription("Shows a list of commands and their parameters")
-            .AddOption("page", ApplicationCommandOptionType.Integer, "The page number to display", minValue: 1)
-            .AddOption("setup", ApplicationCommandOptionType.Boolean, "Explain how to set up the bot on a server")
-            .AddOption("command", ApplicationCommandOptionType.String, "Get help for a specific command", isAutocomplete: true);
+            .AddOption(new SlashCommandOptionBuilder()
+                        .WithName("page")
+                        .WithDescription("Which page to display")
+                        .WithType(ApplicationCommandOptionType.SubCommand)
+                        .AddOption("number", ApplicationCommandOptionType.Integer, "The page number", minValue: 1, isRequired: true))
+            .AddOption(new SlashCommandOptionBuilder()
+                        .WithName("setup")
+                        .WithDescription("Details how to setup the bot on this server")
+                        .WithType(ApplicationCommandOptionType.SubCommand))
+            .AddOption(new SlashCommandOptionBuilder()
+                        .WithName("command")
+                        .WithDescription("Get help for a specific command")
+                        .WithType(ApplicationCommandOptionType.SubCommand)
+                        .AddOption("name", ApplicationCommandOptionType.String, "The name of the command", isAutocomplete: true, isRequired: true));
         globalApplicationCommandProperties.Add(commandHelp.Build());
 
         var commandSendNicknamePoll = new SlashCommandBuilder()
@@ -545,10 +556,9 @@ public class Program
         switch (interaction.Data.CommandName)
         {
             case "help":
-                if(interaction.Data.Current.Name == "command")
-                {
+                if(interaction.Data.Options.First().Name == "command")
+                    if (interaction.Data.Current.Name == "name")
                     await HandleHelpCommandOptionAutocomplete(interaction);
-                }
                 break;
         }
     }
@@ -752,12 +762,40 @@ public class Program
         List<ApplicationCommandProperties> availableCommands = CommandsAvailableToUser(command);
         int totalPages = (int)Math.Ceiling((double)availableCommands.Count / commandsPerPage);
 
-        //  Only one entry for each option can exist
-        if ((Int64?)command.Data.Options.Where(x => x.Name == "page").FirstOrDefault(defaultValue: null)?.Value is Int64 || noOptionsSpecified)
+        string subcommand = command.Data.Options.First().Name;
+        var value = command.Data.Options.First().Options.First().Value;
+        switch (subcommand)
+        {
+            case "command":
+                {
+                    string requestedCommand = (string)value;
+                    if (requestedCommand.StartsWith("/"))
+                        requestedCommand = requestedCommand.TrimStart('/');
+
+                    if ((SlashCommandProperties)availableCommands.Where(x => x.Name.Value.ToLower() == requestedCommand.ToLower()).FirstOrDefault(defaultValue: null)! is SlashCommandProperties slashCommand)
+                    {
+                        var embed = CommandHelpEmbed(slashCommand);
+                        await command.RespondAsync(embed: embed.Build());
+                    }
+                    else if ((SlashCommandProperties)globalApplicationCommandProperties.Where(x => x.Name.Value.ToLower() == requestedCommand.ToLower()).FirstOrDefault(defaultValue: null)! is not null)
+                    {
+                        await command.RespondAsync($"You don't have the right permissions to execute command `/{requestedCommand}`");
+                    }
+                    else
+                    {
+                        await command.RespondAsync($"Command `/{requestedCommand}` doesn't exist");
+                    }
+                }
+                break;
+
+            case "page":
+                goto default;
+
+            default:
         {
             Int64 requestedPage = 1;
             if (!noOptionsSpecified)
-                requestedPage = (Int64)command.Data.Options.Where(x => x.Name == "page").FirstOrDefault(defaultValue: null)?.Value!;
+                        requestedPage = (Int64)value;
 
             if (requestedPage > totalPages)
                 requestedPage = totalPages;
@@ -780,24 +818,8 @@ public class Program
                 embeds.Add(embed.Build());
             }
             await command.RespondAsync("Available commands:", embeds: embeds.ToArray());
-
-        } else if (command.Data.Options.Where(x => x.Name == "command").FirstOrDefault(defaultValue: null)?.Value is string requestedCommand)
-        {
-            if (requestedCommand.StartsWith("/"))
-                requestedCommand = requestedCommand.TrimStart('/');
-
-            if((SlashCommandProperties)availableCommands.Where(x => x.Name.Value.ToLower() == requestedCommand.ToLower()).FirstOrDefault(defaultValue: null)! is SlashCommandProperties slashCommand)
-            {
-                var embed = CommandHelpEmbed(slashCommand);
-                await command.RespondAsync(embed: embed.Build());
-            }else if((SlashCommandProperties)globalApplicationCommandProperties.Where(x => x.Name.Value.ToLower() == requestedCommand.ToLower()).FirstOrDefault(defaultValue: null)! is not null)
-            {
-                await command.RespondAsync($"You don't have the right permissions to execute command `/{requestedCommand}`");
             }
-            else
-            {
-                await command.RespondAsync($"Command `/{requestedCommand}` doesn't exist");
-            }
+                break;
         }
     }
     private static EmbedBuilder CommandHelpEmbed(SlashCommandProperties slashCommand)
