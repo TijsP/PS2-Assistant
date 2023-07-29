@@ -29,10 +29,6 @@ using JsonSerializer = System.Text.Json.JsonSerializer;
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1050:Declare types in namespaces", Justification = "Program will not be used as a library")]
 public class Program
 {
-    //  Before release:
-    //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
-
-    //  After release:
     //  TODO:   Annotate entire codebase
     //  TODO:   Fix HasPermissionsToWrite failing when public channel is created while bot is online
     //  TODO:   Check if LeftGuildHandler triggers on kick and ban
@@ -763,12 +759,11 @@ public class Program
         int totalPages = (int)Math.Ceiling((double)availableCommands.Count / commandsPerPage);
 
         string subcommand = command.Data.Options.First().Name;
-        var value = command.Data.Options.First().Options.First().Value;
         switch (subcommand)
         {
             case "command":
                 {
-                    string requestedCommand = (string)value;
+                    string requestedCommand = (string)command.Data.Options.First().Options.First().Value;
                     if (requestedCommand.StartsWith("/"))
                         requestedCommand = requestedCommand.TrimStart('/');
 
@@ -788,6 +783,50 @@ public class Program
                 }
                 break;
 
+            case "setup":
+                {
+                    var embeds = new List<Embed>(){
+                        new EmbedBuilder()
+                        .WithTitle("Configure Channels")
+                        .WithDescription("First of all, make sure all channels are configured properly. Use `/set-welcome-channel` to set a welcome channel, and use `/set-log-channel` to set a log channel. " +
+                                            "The welcome channel will be used to send messages whenever a new user joins (such as a welcome message, or a nickname poll), while the log channel will be used to send " +
+                                            "messages that are of interest to the admins. Because of this, it's recommended to set the welcome channel to a public channel, and the log channel to a private (admin only) " +
+                                            "channel.\n" +
+                                            "Also, please make sure the bot has the right permissions to post in these channels - namely the \"View Channel\" and \"Send Messages\" permissions")
+                        .WithColor(247, 82, 37)
+                        .Build(),
+                    new EmbedBuilder()
+                        .WithTitle("Set Main Outfit")
+                        .WithDescription("Next, please inform the bot of the main outfit represented by this server by using `/set-main-outfit`. If left unset, all users that join will be given the non-member role " +
+                                            "(see the next step). The provided tag will be checked against the Planetside API, to ensure the outfit actually exists.")
+                        .WithColor(247, 82, 37)
+                        .Build(),
+                    new EmbedBuilder()
+                        .WithTitle("Nickname Poll")
+                        .WithDescription("Now we'll set up the behaviour of the nickname poll. This poll can ask the user for their in-game character name and, if the character exists, will set their Discord nickname to " +
+                                            "their outfit tag + their character name (for example, \"[OUTF] xXCharacterNameXx\"). Using `/include-nickname-poll`, you can choose whether this poll should be sent whenever a new " +
+                                            "user joins, while `/send-nickname-poll` will send a nickname poll to whichever channel the bot has access to (the rules channel, for instance).")
+                        .WithColor(247, 82, 37)
+                        .Build(),
+                    new EmbedBuilder()
+                        .WithTitle("Configure Roles")
+                        .WithDescription("Now we're ready to configure the roles that will be handed out by the bot. These can be set by `/set-member-role` and `/set-non-member-role`. The member role will be given whenever " +
+                                            "the in-game character of the user is a member of the outfit specified by `/set-main-outfit`, while the non-member role will be given in any other case.\n" +
+                                            "Please keep in mind that this bot has no way of actually verifying whether the user actually owns the character provided: for this reason, it's recommended not to hand out any " +
+                                            "roles that have meaningfull permissions associated with them.\n" +
+                                            "Also, make sure the role of the bot outranks any of the roles set by `/set-member-role` and `/set-non-member-role`. The bot will not be able to hand out these roles otherwise.")
+                        .WithColor(247, 82, 37)
+                        .Build(),
+                    new EmbedBuilder()
+                        .WithTitle("Optionally")
+                        .WithDescription("Finally, you can choose whether the bot should send a general welcome message whenever a user joins. This can be done using `/send-welcome-message`. Welcome messages will be sent to " +
+                                            "the channel specified with `/set-welcome-channel`.")
+                        .WithColor(247, 82, 37)
+                        .Build()};
+                    await command.RespondAsync(embeds: embeds.ToArray());
+                }
+                break;
+
             case "page":
                 goto default;
 
@@ -795,7 +834,7 @@ public class Program
         {
             Int64 requestedPage = 1;
             if (!noOptionsSpecified)
-                        requestedPage = (Int64)value;
+                        requestedPage = (Int64)command.Data.Options.First().Options.First().Value;
 
             if (requestedPage > totalPages)
                 requestedPage = totalPages;
