@@ -1,29 +1,43 @@
 ﻿using System.Text.Json;
-using JsonSerializer = System.Text.Json.JsonSerializer;
-
-using Discord;
-using Discord.WebSocket;
-using Newtonsoft.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using PS2_Assistant.Data;
-using PS2_Assistant.Models;
-using Newtonsoft.Json.Linq;
+using System.Runtime.CompilerServices;
+using System.Diagnostics;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
-using System.Diagnostics;
+
+using Discord;
+using Discord.WebSocket;
+
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+using Serilog;
+using Serilog.Formatting.Json;
+using Serilog.Events;
+using Serilog.Context;
+using Serilog.Templates;
+using Serilog.Templates.Themes;
+
+using PS2_Assistant.Data;
+using PS2_Assistant.Models;
+
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1050:Declare types in namespaces", Justification = "Program will not be used as a library")]
 public class Program
 {
     //  Before release:
-    //  TODO:   Fix HasPermissionsToWrite failing when public channel is created while bot is online
     //  TODO:   Add setup option to help command (as bool, to explain admins how to set up the bot)
-    //  TODO:   Send Log() messages to file (in addition to CLI)
-    //  TODO:   Annotate entire codebase
+    //  TODO:   Add appsettings.Development.json for verbose logging
 
     //  After release:
+    //  TODO:   Annotate entire codebase
+    //  TODO:   Fix HasPermissionsToWrite failing when public channel is created while bot is online
+    //  TODO:   Check if LeftGuildHandler triggers on kick and ban
+    //  TODO:   Hook up Log function to a Web API (Sentry?)?
     //  TODO:   Add confirmation check for stop command
     //  TODO:   Periodically check and update outfit tag of members (and update in User table
     //  TODO:   Add "Clear" option to set-main-outfit to reset main outfit tag
@@ -35,6 +49,7 @@ public class Program
     //  TODO:   Convert to use Interaction Framework?
     //  FIX:    ModalSubmitted handler is blocking the gateway task (wait for PR https://github.com/discord-net/Discord.Net/pull/2722)
     //  TODO:   Implement SendChannelMessage(guildId, channelId, message, [CallerMemberName] caller)
+    //  TODO: Logging user ID potential GDPR violation?
 
     public static Task Main() => new Program().MainAsync();
 
@@ -51,8 +66,32 @@ public class Program
 
     public async Task MainAsync()
     {
+        if (appSettings.GetConnectionString("CensusAPIKey") is null ||
+            appSettings.GetConnectionString("DiscordBotToken") is null ||
+            appSettings.GetConnectionString("LoggerURL") is null ||
+            appSettings.GetConnectionString("LoggerAPIKey") is null)
+        {
+            var exception = new KeyNotFoundException("Missing connection strings in appsettings.json");
+            await Console.Out.WriteLineAsync(JsonConvert.SerializeObject(exception));
+            throw exception;
+        }
+
+        //  Setup the logger
+        string outputTemplate = "[{@t:HH:mm:ss} {@l:u3}] [{Source}]{#if GuildId is not null} (Guild: {GuildId}){#end} {@m:lj}\n{@e}";
+        var expression = new ExpressionTemplate(outputTemplate, theme: TemplateTheme.Literate);
+        Log.Logger = new LoggerConfiguration()
+            .MinimumLevel.Debug()
+            .Enrich.FromLogContext()
+            .WriteTo.File(new JsonFormatter(), "Logs/log.json")
+            .WriteTo.Seq(appSettings.GetConnectionString("LoggerURL")!, apiKey: appSettings.GetConnectionString("LoggerAPIKey"))
+            .WriteTo.Console(expression)
+            .CreateLogger();
+
+        using (LogContext.PushProperty("Source", nameof(MainAsync)))
+            Log.Information("Bot starting up...");
+
         //  Setup bot client
-        _botclient.Log += Log;
+        _botclient.Log += BotLogHandler;
         _botclient.Ready += Client_Ready;
         _botclient.SlashCommandExecuted += SlashCommandHandler;
         _botclient.AutocompleteExecuted += AutocompleteExecutedHandler;
@@ -75,6 +114,9 @@ public class Program
         //  Wait for client to be ready
         while (!clientIsReady) ;
 
+        using(LogContext.PushProperty("Source", nameof(MainAsync)))
+            Log.Information("Bot is running");
+
         //  Check whether the bot was added to/removed from any guilds while offline
         List<ulong> subscribedGuilds =  _botclient.Guilds.ToList().Select(x => x.Id).ToList();
         List<ulong> addedGuilds = subscribedGuilds.Except(_botDatabase.Guilds.Select(x => x.GuildId).ToList()).ToList();
@@ -84,7 +126,7 @@ public class Program
         {
             foreach (ulong guildId in addedGuilds)
             {
-                await Log(new LogMessage(LogSeverity.Info, nameof(MainAsync), $"Bot was added to guild {guildId} while offline"));
+                SendLog(LogEventLevel.Information, guildId, "Bot was added to guild while offline");
                 await AddGuild(guildId);
             }
         }
@@ -92,7 +134,7 @@ public class Program
         {
             foreach (ulong guildId in removedGuilds)
             {
-                await Log(new LogMessage(LogSeverity.Info, nameof(MainAsync), $"Bot was removed from guild {guildId} while offline"));
+                SendLog(LogEventLevel.Information, guildId, "Bot was removed from guild while offline");
                 await RemoveGuild(guildId);
             }
         }
@@ -157,6 +199,7 @@ public class Program
         }
         }
         await _botclient.StopAsync();
+        Log.CloseAndFlush();
     }
 
     readonly List<ApplicationCommandProperties> guildApplicationCommandProperties = new();
@@ -339,7 +382,7 @@ public class Program
             }
             else
             {
-                await Log(new LogMessage(LogSeverity.Warning, nameof(UserJoined), $"Missing permissions to send messages in welcome channel {welcomeChannelId} in guild {user.Guild.Id}"));
+                SendLog(LogEventLevel.Warning, user.Guild.Id, "Missing permissions to send messages in welcome channel {WelcomeChannelId}", welcomeChannelId);
                 await SendLogChannelMessageAsync(user.Guild.Id, "Couldn't set welcome message: missing permissions!");
             }
 
@@ -347,10 +390,10 @@ public class Program
         else
         {
             await SendLogChannelMessageAsync(user.Guild.Id, "Can't send welcome message: no welcome channel set!");
-            await Log(new LogMessage(LogSeverity.Warning, nameof(UserJoined), $"No welcome channel set for guild {user.Guild.Id}"));
+            SendLog(LogEventLevel.Warning, user.Guild.Id, "No welcome channel set");
         }
 
-        await Log(new LogMessage(LogSeverity.Info, nameof(UserJoined), $"User {user.Id} joined guild {user.Guild.Id}"));
+        SendLog(LogEventLevel.Information, user.Guild.Id, "User {UserId} joined the guild", user.Id);
     }
     public async Task UserLeftHandler(SocketGuild guild, SocketUser user)
     {
@@ -360,13 +403,13 @@ public class Program
             await _botDatabase.SaveChangesAsync();
         }
 
-        await Log(new LogMessage(LogSeverity.Info, nameof(UserLeftHandler), $"User {user.Id} left guild {guild.Id}"));
+        SendLog(LogEventLevel.Information, guild.Id, "User {UserId} left the guild", user.Id);
     }
     public async Task JoinedGuildHandler(SocketGuild guild)
     {
         await AddGuild(guild.Id);
 
-        await Log(new LogMessage(LogSeverity.Info, nameof(JoinedGuildHandler), $"Joined new guild: {guild.Id}"));
+        SendLog(LogEventLevel.Information, guild.Id, "Bot was added to the guild");
     }
     private async Task AddGuild(ulong guildId)
     {
@@ -381,7 +424,7 @@ public class Program
     {
         await RemoveGuild(guild.Id);
 
-        await Log(new LogMessage(LogSeverity.Info, nameof(LeftGuildHandler), $"Left guild: {guild.Id}"));
+        SendLog(LogEventLevel.Information, guild.Id, "Bot left the guild");
     }
     private async Task RemoveGuild(ulong guildId)
         {
@@ -397,7 +440,7 @@ public class Program
         switch (component.Data.CustomId)
         {
             case "start-nickname-process":
-                await Log(new LogMessage(LogSeverity.Debug, "start-nickname-process", $"User {component.User.Id} started the nickname process"));
+                SendLog(LogEventLevel.Debug, component.GuildId!.Value, "User {UserId} started the nickname process", component.User.Id);
                 var modal = new ModalBuilder()
                     .WithTitle("Planetside username")
                     .WithCustomId("nickname-modal")
@@ -444,7 +487,8 @@ public class Program
                 await HandleFirstWithRankCommand(command);
                 break;
             case "find-promotable-member-at-rank":
-                await HandleFindPromotableMemberAtRankCommand(command);
+                await command.RespondAsync("Command not implemented");
+                //await HandleFindPromotableMemberAtRankCommand(command);
                 break;
             case "help":
                 await HandleHelp(command);
@@ -485,13 +529,13 @@ public class Program
                 await command.DeferAsync();
                 if (command.GuildId is not null)
                     await JoinedGuildHandler(_botclient.GetGuild((ulong)command.GuildId));
-                await command.RespondAsync("Executed.", ephemeral: true);
+                await command.FollowupAsync("Executed.", ephemeral: true);
                 break;
             case "test-guild-left":
                 await command.DeferAsync();
                 if (command.GuildId is not null)
                     await LeftGuildHandler(_botclient.GetGuild((ulong)command.GuildId));
-                await command.RespondAsync("Executed.", ephemeral: true);
+                await command.FollowupAsync("Executed.", ephemeral: true);
                 break;
         }
     }
@@ -538,11 +582,11 @@ public class Program
         nickname = nickname.Trim();
         if (Regex.IsMatch(nickname, @"[\s]"))
         {
-            await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"User {socketModal.User.Id} submitted an invalid username: {nickname}"));
+            SendLog(LogEventLevel.Information, socketModal.GuildId.Value, "User {UserId} submitted an invalid username: {nickname}", socketModal.User.Id, nickname);
             await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Invalid nickname submitted: {nickname}. Whitespace are not allowed. Please try again.");
             return;
         }
-        await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"User {socketModal.User.Id} submitted nickname: {nickname}"));
+        SendLog(LogEventLevel.Information, socketModal.GuildId.Value, "User {UserId} submitted nickname: {nickname}", socketModal.User.Id, nickname);
 
         //  Request players with this name from Census, including a few other, similar names
         string outfitDataJson = await jsonTask;
@@ -551,8 +595,8 @@ public class Program
             //  If 0 is returned, no similar names were found. If more than 1 are returned and the first result is incorrect, no exact match was found
             if (playerData?.returned == 0 || playerData?.returned > 1 && playerData.character_name_list[0].name.first_lower != nickname.ToLower())
             {
-                await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"Unable to find a match for name \"{nickname}\" in the Census database. Dumping returned JSON string as a debug log message."));
-                await Log(new LogMessage(LogSeverity.Debug, nameof(HandleNicknameModal), outfitDataJson));
+                SendLog(LogEventLevel.Information, socketModal.GuildId.Value, "Unable to find a match for name {nickname} in the Census database. Dumping returned JSON string as a debug log message.", nickname);
+                SendLog(LogEventLevel.Debug, socketModal.GuildId.Value, "Unable to find match for {nickname} using Census API. Returned JSON:\n{json}", nickname, outfitDataJson);
                 await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"No exact match found for {nickname}. Please try again.");
                 return;
             }
@@ -561,7 +605,7 @@ public class Program
             Guild? guild = await findGuild;
             if (guild is null)
             {
-                await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), $"No {nameof(Guild)} data found for guild id {socketModal.GuildId}"));
+                SendLog(LogEventLevel.Error, socketModal.GuildId.Value, "No guild data found in database for this guild");
                 await socketModal.ModifyOriginalResponseAsync(x => x.Content = "Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
                 return;
             }
@@ -574,7 +618,7 @@ public class Program
                 //  Check whether a user with nickname already exists on the server, to prevent impersonation
                 if (guild.Users.Where(x => x.CharacterName == nickname && x.SocketUserId != socketModal.User.Id).FirstOrDefault(defaultValue: null) is User impersonatedUser)
                 {
-                    await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), $"Possible impersonation: user tried to set nickname to \"{nickname}\" in guild {socketModal.GuildId}, but that character already exists in that guild!"));
+                    SendLog(LogEventLevel.Warning, socketModal.GuildId.Value, "Possible impersonation: user {UserId} tried to set nickname to {nickname}, but that character already exists in this guild!", socketModal.User.Id, nickname);
                     await socketModal.FollowupAsync($"User {socketModal.User.Mention} tried to set his nickname to {nickname}, but user <@{impersonatedUser.SocketUserId}> already exists on the server! Incident reported...");
                     await SendLogChannelMessageAsync((ulong)socketModal.GuildId, $"User {socketModal.User.Mention} tried to set nickname to \"{nickname}\", but that user already exists on this server (<@{impersonatedUser.SocketUserId}>)");
                     return;
@@ -587,12 +631,12 @@ public class Program
                     if (guild.OutfitTag is not null && alias?.ToLower() == guild.OutfitTag.ToLower() && guild.Roles?.MemberRole is ulong memberRoleId)
                     {
                         await guildUser.AddRoleAsync(memberRoleId);
-                        await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"Added role {memberRoleId} to user {socketModal.User.Id} in guild {socketModal.GuildId}"));
+                        SendLog(LogEventLevel.Information, socketModal.GuildId.Value, "Added role {MemberRoleId} to user {UserId}", memberRoleId, socketModal.User.Id);
                     }
                     else if (guild.OutfitTag is not null && alias?.ToLower() != guild.OutfitTag.ToLower() && guild.Roles?.NonMemberRole is ulong nonMemberRoleId)
                     {
                         await guildUser.AddRoleAsync(nonMemberRoleId);
-                        await Log(new LogMessage(LogSeverity.Info, nameof(HandleNicknameModal), $"Added role {nonMemberRoleId} to user {socketModal.User.Id} in guild {socketModal.GuildId}"));
+                        SendLog(LogEventLevel.Information, socketModal.GuildId.Value, "Added role {NonMemberId} to user {UserId}", nonMemberRoleId, socketModal.User.Id);
                     }
 
                     //  Check whether user already exists in the database for this guild
@@ -611,28 +655,27 @@ public class Program
                 }
                 catch (Exception ex)
                 {
-                    await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), $"Unable to assign a nickname to guild user {socketModal.User.Id}. Encountered exception: \"{ex.Message}\""));
+                    SendLog(LogEventLevel.Warning, socketModal.GuildId.Value, "Unable to assign nickname to user {UserId}. Encountered exception:", socketModal.User.Id, exep: ex);
                     await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set your nickname to \"[{alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
                 }
             }
             else
             {
-                await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), $"Could not convert user {socketModal.User.Id} in guild {socketModal.GuildId} from SocketUser to IGuildUser."));
+                SendLog(LogEventLevel.Warning, socketModal.GuildId.Value, "Could not convert user {UserId} from SocketUser to IGuildUser", socketModal.User.Id);
                 await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set your nickname to \"[{alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
             }
 
         }
         else
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleNicknameModal), "Census failed to return a list of names. Dumping returned JSON string as a debug log message."));
-            await Log(new LogMessage(LogSeverity.Debug, nameof(HandleNicknameModal), outfitDataJson));
+            SendLog(LogEventLevel.Warning, socketModal.GuildId.Value, "Census failed to return a list of names. Dumping returned JSON as a debug log message");
+            SendLog(LogEventLevel.Debug, socketModal.GuildId.Value, "Returned Census JSON: {json}", outfitDataJson);
             await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Whoops, something went wrong... Unable to find that user due to an error in the Census database.");
         }
     }
     private async Task HandleFirstWithRankCommand(SocketSlashCommand command)
     {
-        //TODO: Logging user ID potential GDPR violation?
-        await Log(new LogMessage(LogSeverity.Info, nameof(HandleFirstWithRankCommand), $"User {command.User.Id} executed first-with-rank. The member holding rank {command.Data.Options.First().Value} the longest was requested."));
+        SendLog(LogEventLevel.Information, command.GuildId!.Value, "User {UserId} executed first-with-rank. The member holding rank {RankOrdinal} the longest was requested", command.User.Id, command.Data.Options.First().Value);
         await command.DeferAsync();
 
         rPlayerData? longestMember = null;
@@ -659,19 +702,21 @@ public class Program
 
         await command.FollowupAsync($"Member {longestMember?.character_id_join_character_name?.name?.first} has been at rank {requestedRank} since {longestMember?.member_since_date}");
     }
+
+    //  NEEDS REWRITE
     private async Task HandleFindPromotableMemberAtRankCommand(SocketSlashCommand command)
     {
-        await Log(new LogMessage(LogSeverity.Info, nameof(HandleFindPromotableMemberAtRankCommand), $"find-promotable-member-at-rank called by user {command.User.Id} with params: {command.Data.Options.ToArray()[0].Value}{(command.Data.Options.Count > 2 ? ", " + command.Data.Options.ToArray()[2].Value : "")}"));
+        await BotLogHandler(new LogMessage(LogSeverity.Info, nameof(HandleFindPromotableMemberAtRankCommand), $"find-promotable-member-at-rank called by user {command.User.Id} with params: {command.Data.Options.ToArray()[0].Value}{(command.Data.Options.Count > 2 ? ", " + command.Data.Options.ToArray()[2].Value : "")}"));
         await command.DeferAsync();
 
         var outfitDataJson = await _censusclient.GetStringAsync($"http://census.daybreakgames.com/s:{appSettings.GetConnectionString("CensusAPIKey")}/get/ps2:v2/outfit/?c:show=outfit_id,alias_lower,alias,member_count&alias_lower=txlc&c:join=outfit_rank^inject_at:ranks^show:ordinal%27name^list:1^terms:ordinal");
-        await Log(new LogMessage(LogSeverity.Info, nameof(HandleFindPromotableMemberAtRankCommand), $"Census returned: {outfitDataJson}"));
+        await BotLogHandler(new LogMessage(LogSeverity.Info, nameof(HandleFindPromotableMemberAtRankCommand), $"Census returned: {outfitDataJson}"));
         if (JsonSerializer.Deserialize<rReturnedOutfitData>(outfitDataJson, defaultCensusJsonDeserializeOptions) is rReturnedOutfitData returnedData)
         {
             rOutfitData outfitData = returnedData.outfit_list[0];
             if (returnedData.returned == 0 || outfitData.ranks is null)
             {
-                await Log(new LogMessage(LogSeverity.Warning, nameof(HandleFindPromotableMemberAtRankCommand), $"No data found by Census for outfit with tag \"{command.Data.Options.First().Value}\""));
+                await BotLogHandler(new LogMessage(LogSeverity.Warning, nameof(HandleFindPromotableMemberAtRankCommand), $"No data found by Census for outfit with tag \"{command.Data.Options.First().Value}\""));
                 await command.FollowupAsync($"No outfit data found for tag \"{command.Data.Options.First().Value}\". Are you sure the outfit tag is correct?");
                 return;
             }
@@ -805,7 +850,7 @@ public class Program
         {
             guild.SendWelcomeMessage = sendWelcomeMessage;
             await _botDatabase.SaveChangesAsync();
-            await Log(new LogMessage(LogSeverity.Info, nameof(HandleSendWelcomeMessage), $"Welcome messages will {(sendWelcomeMessage ? "now" : "not")} be sent to guild {guild.GuildId}"));
+            SendLog(LogEventLevel.Information, command.GuildId!.Value, "Welcome messages will {Confirmation} be sent", sendWelcomeMessage ? "now" : "not");
             await command.RespondAsync($"Welcome messages will {(sendWelcomeMessage ? "now" : "not")} be sent");
         }
     }
@@ -821,7 +866,7 @@ public class Program
         }
         else
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleIncludeNicknamePoll), $"No database entry found for guild {command.GuildId}"));
+            SendLog(LogEventLevel.Error, command.GuildId!.Value, "No database entry found for this guild");
             await command.FollowupAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
         }
 
@@ -833,7 +878,7 @@ public class Program
 
         if (command.GuildId is null || (await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId))?.Channels is not Channels channels)
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetLogChannel), $"No {nameof(Channels)} found for guild id {command.GuildId}"));
+            SendLog(LogEventLevel.Error, command.GuildId!.Value, "No channels found in database for this guild");
             await command.RespondAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
             return;
         }
@@ -843,11 +888,11 @@ public class Program
         channels.LogChannel = channel.Id;
         _botDatabase.SaveChanges();
 
-        await Log(new LogMessage(LogSeverity.Info, nameof(HandleSetLogChannel), $"Log channel set to {channel.Id} for guild {command.GuildId}"));
+        SendLog(LogEventLevel.Information, command.GuildId.Value, "Log channel set to {LogChannelId}", channel.Id);
         await command.FollowupAsync($"Log channel set to <#{channel.Id}>");
         if(!HasPermissionsToWriteChannel(channel))
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetLogChannel), $"Bot doesn't have the right permissions to post in channel {channel.Id} in guild {command.GuildId}"));
+            SendLog(LogEventLevel.Warning, command.GuildId.Value, "Bot doesn't have the right permissions to post in channel {LogChannelId}", channel.Id);
             await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
         }
     }
@@ -855,7 +900,7 @@ public class Program
     {
         if(command.GuildId is null || (await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId))?.Channels is not Channels channels)
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetWelcomeChannel), $"No {nameof(Channels)} found for guild id {command.GuildId}"));
+            SendLog(LogEventLevel.Error, command.GuildId!.Value, "No channels found in database for this guild");
             await command.RespondAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
             return;
         }
@@ -865,11 +910,11 @@ public class Program
         channels.WelcomeChannel = channel.Id;
         _botDatabase.SaveChanges();
 
-        await Log(new LogMessage(LogSeverity.Info, nameof(HandleSetWelcomeChannel), $"Welcome channel set to {channel.Id} for guild {command.GuildId}"));
+        SendLog(LogEventLevel.Information, command.GuildId.Value, "Welcome channel set to {WelcomeChannelId}", channel.Id);
         await command.RespondAsync($"Welcome channel set to <#{channel.Id}>");
         if (!HasPermissionsToWriteChannel(channel))
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetWelcomeChannel), $"Bot doesn't have the right permissions to post in channel {channel.Id} in guild {command.GuildId}"));
+            SendLog(LogEventLevel.Warning, command.GuildId.Value, "Bot doesn't have the right permissions to post in channel {WelcomeChannelId}", channel.Id);
             await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
         }
     }
@@ -880,22 +925,22 @@ public class Program
 
         if ((await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId!))?.Roles is not Roles roles)
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetMemberRole), $"No {nameof(Channels)} found for guild id {command.GuildId}"));
+            SendLog(LogEventLevel.Error, command.GuildId.Value, "No roles found in database for this guild");
             await command.FollowupAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
             return;
         }
 
-        SocketRole? role = command.Data.Options.First().Value as SocketRole;
-        roles.MemberRole = role?.Id;
+        SocketRole role = (SocketRole)command.Data.Options.First().Value;
+        roles.MemberRole = role.Id;
         _botDatabase.SaveChanges();
 
-        await Log(new LogMessage(LogSeverity.Info, nameof(HandleSetMemberRole), $"Member role set to {role?.Id} for guild {command.GuildId}"));
+        SendLog(LogEventLevel.Information, command.GuildId.Value, "Member role set to {MemberRoleId}", role.Id);
         await command.FollowupAsync($"Member role set to {role?.Mention}");
 
         SocketRole? botRole = _botclient.GetGuild((ulong)command.GuildId!).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged);
         if (role?.Position > botRole?.Position)
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetMemberRole), $"Won't be able to give role {role.Id} to users in guild {command.GuildId}"));
+            SendLog(LogEventLevel.Warning, command.GuildId.Value, "Bot doesn't have the right permissions to give role {MemberRoleId} to users", role.Id);
             await command.FollowupAsync($"The bot won't be able to give role {role.Mention} to users, because it outranks the bot's role. Please go to `Server Settings -> Roles` and make sure that the {botRole.Mention} role is higher on the list than the {role.Mention} role.", allowedMentions: AllowedMentions.None);
     }
     }
@@ -905,22 +950,22 @@ public class Program
 
         if ((await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId!))?.Roles is not Roles guildParameters)
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetNonMemberRole), $"No {nameof(Channels)} found for guild id {command.GuildId}"));
+            SendLog(LogEventLevel.Error, command.GuildId.Value, "No roles found in database for this guild");
             await command.FollowupAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
             return;
         }
 
-        SocketRole? role = command.Data.Options.First().Value as SocketRole;
-        guildParameters.NonMemberRole = role?.Id;
+        SocketRole role = (SocketRole)command.Data.Options.First().Value;
+        guildParameters.NonMemberRole = role.Id;
         _botDatabase.SaveChanges();
 
-        await Log(new LogMessage(LogSeverity.Info, nameof(HandleSetNonMemberRole), $"Non-member role set to {role?.Id} for guild {command.GuildId}"));
+        SendLog(LogEventLevel.Information, command.GuildId.Value, "Non-member role set to {NonMemberRoleId}", role.Id);
         await command.FollowupAsync($"Non-member role set to {role?.Mention}");
 
         SocketRole? botRole = _botclient.GetGuild((ulong)command.GuildId!).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged);
         if (role?.Position > botRole?.Position)
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetMemberRole), $"Won't be able to give role {role.Id} to users in guild {command.GuildId}"));
+            SendLog(LogEventLevel.Warning, command.GuildId.Value, "Bot doesn't have the right permissions to give role {NonMemberRoleId} to users", role.Id);
             await command.FollowupAsync($"The bot won't be able to give role {role.Mention} to users, because it outranks the bot's role. Please go to `Server Settings -> Roles` and make sure that the {botRole.Mention} role is higher on the list than the {role.Mention} role.", allowedMentions: AllowedMentions.None);
         }
     }
@@ -930,7 +975,7 @@ public class Program
 
         if (_botDatabase.Guilds.Find(command.GuildId) is not Guild guild)
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetMainOutfit), $"No {nameof(Channels)} found for guild id {command.GuildId}"));
+            SendLog(LogEventLevel.Error, command.GuildId!.Value, "No guild data found in database for this guild");
             await command.FollowupAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
             return;
         }
@@ -941,20 +986,20 @@ public class Program
         int? count = JObject.Parse(outfitCountJson)["count"]?.ToObject<int>();      //  Only the number of results is returned by the query. If the result is 1 it is assumed the given outfit exists, though it might be different from what the user requested
         if(count == 0)
         {
-            await Log(new LogMessage(LogSeverity.Info, nameof(HandleSetMainOutfit), $"No outfit found with tag {tag}"));
+            SendLog(LogEventLevel.Information, command.GuildId!.Value, "No outfit found with tag {OutfitTag}", tag);
             await command.FollowupAsync($"No outfit found with tag {tag}!");
             return;
         }
         else if (!count.HasValue || count != 1)
         {
-            await Log(new LogMessage(LogSeverity.Warning, nameof(HandleSetMainOutfit), $"Something went wrong requesting outfit tag {tag} of Census. Dumping JSON as a debug log message."));
-            await Log(new LogMessage(LogSeverity.Debug, nameof(HandleSetMainOutfit), $"{outfitCountJson}"));
+            SendLog(LogEventLevel.Warning, command.GuildId!.Value, "Something went wrong requesting outfit tag {OutfitTag} from Census. Dumping JSON as a debug log message", tag);
+            SendLog(LogEventLevel.Debug, command.GuildId.Value, "Census returned after requesting outfit tag {OutfitTag}:\n{json}", tag, outfitCountJson);
             await command.FollowupAsync($"Something went wrong while validating outfit tag {tag}...");
             return;
         }
 
         await command.FollowupAsync($"Main outfit set to {command.Data.Options.First().Value}");
-        await Log(new LogMessage(LogSeverity.Info, nameof(HandleSetMainOutfit), $"Main outfit of guild {command.GuildId} set to {command.Data.Options.First().Value}"));
+        SendLog(LogEventLevel.Information, command.GuildId!.Value, "Main outfit set to {OutfitTag}", tag);
 
         guild.OutfitTag = tag;
         _botDatabase.SaveChanges();
@@ -990,7 +1035,7 @@ public class Program
             }
             else
             {
-                await Log(new LogMessage(LogSeverity.Warning, nameof(SendNicknamePoll), $"Missing permissions to send nickname poll in channel {channel.Id} in guild {channel.Guild.Id}"));
+            SendLog(LogEventLevel.Warning, channel.Guild.Id, "Missing permissions to send nickname poll in channel {ChannelId}", channel.Id);
                 await SendLogChannelMessageAsync(channel.Guild.Id, "Couldn't send nickname poll: missing permissions!");
             }
     }
@@ -1013,13 +1058,49 @@ public class Program
         if ((await _botDatabase.getGuildByGuildIdAsync(guildId))?.Channels?.LogChannel is ulong logChannelId && _botclient.GetGuild(guildId).GetChannel(logChannelId) is SocketTextChannel logChannel && HasPermissionsToWriteChannel(logChannel))
             await logChannel.SendMessageAsync(message);
         else
-            await Log(new LogMessage(LogSeverity.Warning, caller, $"Failed to send log message to in guild {guildId}. Has the LogChannel been set up properly?"));
+            SendLog(LogEventLevel.Warning, guildId, "Failed to send log message. Has the log channel been set up properly?");
     }
 
-    private Task Log(LogMessage message)
+    private async Task BotLogHandler(LogMessage message)
     {
-        Console.WriteLine(message.ToString());
-        return Task.CompletedTask;
+        var severity = message.Severity switch
+        {
+            LogSeverity.Critical => LogEventLevel.Fatal,
+            LogSeverity.Error => LogEventLevel.Error,
+            LogSeverity.Warning => LogEventLevel.Warning,
+            LogSeverity.Info => LogEventLevel.Information,
+            LogSeverity.Verbose => LogEventLevel.Verbose,
+            LogSeverity.Debug => LogEventLevel.Debug,
+            _ => LogEventLevel.Information
+        };
+        using(LogContext.PushProperty("Source", message.Source))
+            Log.Write(severity, message.Exception, "{Message}", message.Message);
+        await Task.CompletedTask;
+    }
+
+    public static void SendLog(LogEventLevel level, ulong guildId, string template, Exception? exep = null, [CallerMemberName] string caller = "")
+    {
+        using (LogContext.PushProperty("Source", caller))
+        using (LogContext.PushProperty("GuildId", guildId))
+            Log.Write(level, exep, template);
+    }
+    public static void SendLog<T>(LogEventLevel level, ulong guildId, string template, T prop, Exception? exep = null, [CallerMemberName] string caller = "")
+    {
+        using (LogContext.PushProperty("Source", caller))
+        using (LogContext.PushProperty("GuildId", guildId))
+            Log.Write(level, exep, template, prop);
+    }
+    public static void SendLog<T0, T1>(LogEventLevel level, ulong guildId, string template, T0 prop0, T1 prop1, Exception? exep = null, [CallerMemberName] string caller = "")
+    {
+        using (LogContext.PushProperty("Source", caller))
+        using (LogContext.PushProperty("GuildId", guildId))
+            Log.Write(level, exep, template, prop0, prop1);
+    }
+    public static void SendLog<T0, T1, T2>(LogEventLevel level, ulong guildId, string template, T0 prop0, T1 prop1, T2 prop2, Exception? exep = null, [CallerMemberName] string caller = "")
+    {
+        using(LogContext.PushProperty("Source", caller))
+        using(LogContext.PushProperty("GuildId", guildId))
+            Log.Write(level, exep, template, prop0, prop1, prop2);
     }
 
     private async Task<string> CLIInfo()

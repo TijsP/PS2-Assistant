@@ -6,6 +6,7 @@
 # Additional files and folders
 DB\ backups/
 Migrations/
+Logs/
 
 # User-specific files
 *.rsuser
