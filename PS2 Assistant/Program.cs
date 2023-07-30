@@ -626,6 +626,15 @@ public class Program
                         SendLog(LogEventLevel.Information, socketModal.GuildId.Value, "Added role {NonMemberId} to user {UserId}", nonMemberRoleId, socketModal.User.Id);
                     }
 
+                    await socketModal.ModifyOriginalResponseAsync(x => { x.Content = $"Nickname set to {guildUser.Mention}"; x.AllowedMentions = AllowedMentions.None; });
+                    await socketModal.FollowupAsync($"We've now set your Discord nickname to your in-game name, to avoid potential confusion during tense moments.\nWith that you're all set, thanks for joining and have fun!", ephemeral: true);
+                }
+                catch (Exception ex)
+                {
+                    SendLog(LogEventLevel.Warning, socketModal.GuildId.Value, "Unable to assign nickname to user {UserId}. Encountered exception:", socketModal.User.Id, exep: ex);
+                    await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set your nickname to \"[{alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
+                }
+
                     //  Check whether user already exists in the database for this guild
                     if (guild.Users.Where(x => x.SocketUserId == socketModal.User.Id).FirstOrDefault(defaultValue: null) is User user)
                     {
@@ -635,17 +644,7 @@ public class Program
                     else
                         guild.Users.Add(new User { CharacterName = nickname, CurrentOutfit = alias, SocketUserId = socketModal.User.Id });
                     await _botDatabase.SaveChangesAsync();
-
-                    await socketModal.ModifyOriginalResponseAsync(x => { x.Content = $"Nickname set to {guildUser.Mention}"; x.AllowedMentions = AllowedMentions.None; });
-                    await socketModal.FollowupAsync($"We've now set your Discord nickname to your in-game name, to avoid potential confusion during tense moments.\nWith that you're all set, thanks for joining and have fun!", ephemeral: true);
-                    return;
                 }
-                catch (Exception ex)
-                {
-                    SendLog(LogEventLevel.Warning, socketModal.GuildId.Value, "Unable to assign nickname to user {UserId}. Encountered exception:", socketModal.User.Id, exep: ex);
-                    await socketModal.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set your nickname to \"[{alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
-                }
-            }
             else
             {
                 SendLog(LogEventLevel.Warning, socketModal.GuildId.Value, "Could not convert user {UserId} from SocketUser to IGuildUser", socketModal.User.Id);
