@@ -29,23 +29,6 @@ using JsonSerializer = System.Text.Json.JsonSerializer;
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1050:Declare types in namespaces", Justification = "Program will not be used as a library")]
 public class Program
 {
-    //  TODO:   Annotate entire codebase
-    //  TODO:   Fix HasPermissionsToWrite failing when public channel is created while bot is online
-    //  TODO:   Check if LeftGuildHandler triggers on kick and ban
-    //  TODO:   Hook up Log function to a Web API (Sentry?)?
-    //  TODO:   Add confirmation check for stop command
-    //  TODO:   Periodically check and update outfit tag of members (and update in User table
-    //  TODO:   Add "Clear" option to set-main-outfit to reset main outfit tag
-    //  TODO:   Send message upon bot joining guild
-    //  TODO:   Remove "Get started" message after user has been set up?
-    //  TODO:   Add "Welcome to outfit" message in Welcome channel when user switches outfit
-    //  TODO:   Check for bot permissions upon joining guild
-    //  TODO:   Add service to BotContext?
-    //  TODO:   Convert to use Interaction Framework?
-    //  FIX:    ModalSubmitted handler is blocking the gateway task (wait for PR https://github.com/discord-net/Discord.Net/pull/2722)
-    //  TODO:   Implement SendChannelMessage(guildId, channelId, message, [CallerMemberName] caller)
-    //  TODO: Logging user ID potential GDPR violation?
-    //  TODO:   Add appsettings.Development.json for verbose logging (with separate discord bot token?)
 
     public static Task Main() => new Program().MainAsync();
 
