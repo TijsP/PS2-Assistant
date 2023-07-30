@@ -361,8 +361,6 @@ public class Program
 
         if (await _botDatabase.getGuildByGuildIdAsync(user.Guild.Id) is Guild guild && guild.Channels?.WelcomeChannel is ulong welcomeChannelId)
         {
-            var confirmationButton = new ComponentBuilder()
-                .WithButton("Get Started", "start-nickname-process");
             if (HasPermissionsToWriteChannel((SocketGuildChannel)_botclient.GetChannel(welcomeChannelId)))
             {
                 if(guild.SendWelcomeMessage is true)
