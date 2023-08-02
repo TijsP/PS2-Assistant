@@ -1193,7 +1193,7 @@ public class Program
         int accumulativeUserCount = 0;
         foreach (SocketGuild guild in guilds)
         {
-            accumulativeUserCount += guild.Users.Count;
+            accumulativeUserCount += guild.MemberCount;
         }
 
         string returnString =
