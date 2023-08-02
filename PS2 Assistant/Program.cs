@@ -368,13 +368,7 @@ public class Program
                 if(guild.AskNicknameUponWelcome is true)
                 await SendNicknamePoll((SocketTextChannel)_botclient.GetChannel(welcomeChannelId));
             }
-            else
-            {
-                SendLog(LogEventLevel.Warning, user.Guild.Id, "Missing permissions to send messages in welcome channel {WelcomeChannelId}", welcomeChannelId);
-                await SendLogChannelMessageAsync(user.Guild.Id, "Couldn't set welcome message: missing permissions!");
             }
-
-        }
         else
         {
             await SendLogChannelMessageAsync(user.Guild.Id, "Can't send welcome message: no welcome channel set!");
@@ -871,6 +865,8 @@ public class Program
 
     private async Task HandleSendNicknamePoll(SocketSlashCommand command)
     {
+        await command.DeferAsync();
+
         bool respondEphemerally = true;
         SocketTextChannel targetChannel;
         if (!command.Data.Options.IsNullOrEmpty() && command.Data.Options.First().Value is SocketTextChannel channel)
@@ -881,8 +877,8 @@ public class Program
         else
             targetChannel = (SocketTextChannel)command.Channel;
 
-        await SendNicknamePoll(targetChannel);
-        await command.RespondAsync($"Poll sent to <#{targetChannel.Id}>", ephemeral: respondEphemerally);
+        await command.FollowupAsync($"Attempting to send poll to <#{targetChannel.Id}>", ephemeral: respondEphemerally);
+        await SendNicknamePoll(targetChannel, command);
     }
 
     private async Task HandleSendWelcomeMessage(SocketSlashCommand command)
@@ -931,12 +927,10 @@ public class Program
 
         SendLog(LogEventLevel.Information, command.GuildId.Value, "Log channel set to {LogChannelId}", channel.Id);
         await command.FollowupAsync($"Log channel set to <#{channel.Id}>");
-        if(!HasPermissionsToWriteChannel(channel))
-        {
-            SendLog(LogEventLevel.Warning, command.GuildId.Value, "Bot doesn't have the right permissions to post in channel {LogChannelId}", channel.Id);
-            await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
+
+        //  Notifies user if bot can't write to channel
+        HasPermissionsToWriteChannel(channel);
         }
-    }
     private async Task HandleSetWelcomeChannel(SocketSlashCommand command)
     {
         if(command.GuildId is null || (await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId))?.Channels is not Channels channels)
@@ -953,12 +947,10 @@ public class Program
 
         SendLog(LogEventLevel.Information, command.GuildId.Value, "Welcome channel set to {WelcomeChannelId}", channel.Id);
         await command.RespondAsync($"Welcome channel set to <#{channel.Id}>");
-        if (!HasPermissionsToWriteChannel(channel))
-        {
-            SendLog(LogEventLevel.Warning, command.GuildId.Value, "Bot doesn't have the right permissions to post in channel {WelcomeChannelId}", channel.Id);
-            await command.FollowupAsync($"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Please add the \"View Channel\" permission to the {_botclient.GetGuild((ulong)command.GuildId).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)?.Mention} role in channel <#{channel.Id}>");
+
+        //  Notifies user if bot can't write to channel
+        HasPermissionsToWriteChannel(channel, command);
         }
-    }
 
     private async Task HandleSetMemberRole(SocketSlashCommand command)
     {
@@ -1053,32 +1045,83 @@ public class Program
         return true;
     }
 
-    private bool HasPermissionsToWriteChannel(SocketGuildChannel channel)
+    //  Consider using SendMessageIfPermittedAsync for performance reasons
+    private bool HasPermissionsToWriteChannel(SocketGuildChannel channel, SocketCommandBase? command = null, [CallerMemberName] string caller = "")
     {
-        SocketRole role = _botclient.GetGuild(channel.Guild.Id).GetUser(_botclient.CurrentUser.Id).Roles.FirstOrDefault(x => x.IsManaged)!;     //  Bots always have a managed role of their own
+        SocketGuildUser botUser = _botclient.GetGuild(channel.Guild.Id).GetUser(_botclient.CurrentUser.Id);
         SocketRole everyoneRole = channel.Guild.EveryoneRole;
-        if (channel.GetPermissionOverwrite(role) is OverwritePermissions rolePerms && rolePerms.ViewChannel == PermValue.Allow && (rolePerms.SendMessages == PermValue.Allow || rolePerms.SendMessages == PermValue.Inherit && channel.Guild.GetRole(role.Id).Permissions.SendMessages is true))
+        List<SocketRole> botRoles = botUser.Roles.ToList();
+        List<Overwrite> overwrites = channel.PermissionOverwrites.ToList();
+        OverwritePermissions everyoneOverwritePermissions = channel.GetPermissionOverwrite(everyoneRole)!.Value;    //  Every channel has permission overwrites for the everyone role, so it can't be null
+        bool hasViewChannel = false;
+        bool hasSendMessages = false;
+        
+        //  Check View Channel permissions
+        if (everyoneOverwritePermissions.ViewChannel == PermValue.Allow || (everyoneOverwritePermissions.ViewChannel == PermValue.Inherit && everyoneRole.Permissions.ViewChannel == true))
+            hasViewChannel = true;
+        else if (overwrites.Any(x => (botRoles.Any(y => x.TargetId == y.Id) || x.TargetId == botUser.Id) && x.Permissions.ViewChannel == PermValue.Allow))
+            hasViewChannel = true;
+        //  The View Channel permission can't be inherited: if a channel is set to private, the bot has to have a role that has the permission allowed for that channel
+
+        //  Check Send Messages permissions
+        //  If any (non-@everyone) roles are allowed, it doesn't matter if there are any that are denied (allow overwrites deny)
+        if (overwrites.Any(x => (botRoles.Any(y => x.TargetId == y.Id) || x.TargetId == botUser.Id) && x.TargetId != everyoneRole.Id && x.Permissions.SendMessages == PermValue.Allow))
+            hasSendMessages = true;
+        //  If there are no roles which have specifically been denied, we can check for either @everyone permissions or inherited permissions
+        else if (!overwrites.Any(x => (botRoles.Any(y => x.TargetId == y.Id) || x.TargetId == botUser.Id) && x.Permissions.SendMessages == PermValue.Deny))
+            //  @everyone permissions can't overwrite a deny
+            if (everyoneOverwritePermissions.SendMessages == PermValue.Allow || (everyoneOverwritePermissions.SendMessages == PermValue.Inherit && everyoneRole.Permissions.SendMessages == true))
+                hasSendMessages = true;
+            else if (overwrites.Any(x => x.Permissions.SendMessages == PermValue.Inherit &&
+                        (botUser.Id == x.TargetId ?     //  Check if overwrite is for a user
+                            botUser.GuildPermissions.Has(GuildPermission.ViewChannel) :
+                            _botclient.GetGuild(channel.Guild.Id).Roles.Where(y => y.Id == x.TargetId).First().Permissions.SendMessages == true)))
+                hasSendMessages = true;
+
+        if (hasViewChannel && hasSendMessages)
             return true;
-        else if (channel.GetPermissionOverwrite(_botclient.CurrentUser) is OverwritePermissions botPerms && botPerms.ViewChannel == PermValue.Allow && (botPerms.SendMessages == PermValue.Allow || botPerms.SendMessages == PermValue.Inherit && channel.Guild.GetUser(_botclient.CurrentUser.Id).GuildPermissions.SendMessages is true))
-            return true;
-        else if (channel.GetPermissionOverwrite(everyoneRole) is OverwritePermissions everyonePerms && (everyonePerms.ViewChannel == PermValue.Allow || everyonePerms.ViewChannel == PermValue.Inherit && everyoneRole.Permissions.ViewChannel is true) && (everyonePerms.SendMessages == PermValue.Allow || everyonePerms.SendMessages == PermValue.Inherit && channel.Guild.GetRole(everyoneRole.Id).Permissions.SendMessages is true))
-            return true;
+        else
+        {
+            SendLog(LogEventLevel.Warning, channel.Guild.Id, "Bot doesn't have the right permissions to post in channel {ChannelId}", channel.Id);
+
+            if (command is not null)
+            {
+                string warningMessage = $"Warning: the bot doesn't have the right permissions to post in <#{channel.Id}>. Missing permissions: {(hasViewChannel ? "" : "\"View Channel\"")}{(hasViewChannel && hasSendMessages ? ", " : "")}{(hasSendMessages ? "" : "\"Send Messages\"")}";
+                if (command.HasResponded)
+                    command.FollowupAsync(warningMessage);
+                else
+                    command.RespondAsync(warningMessage);
+            }
+            //  Required to prevent a recursive loop, since SendLogChannelMessageAsync calls HasPermissionsToWriteChannel
+            else if (caller != nameof(SendLogChannelMessageAsync))
+                Task.Run(async () => await SendLogChannelMessageAsync(channel.Guild.Id, "Couldn't set welcome message: missing permissions!"));
+
         return false;
     }
+    }
         
-    private async Task SendNicknamePoll(SocketTextChannel channel)
+    private async Task SendMessageIfPermittedAsync(SocketTextChannel channel, string message, SocketSlashCommand? respondTo = null, MessageComponent? messageComponent = null, [CallerMemberName] string caller = "")
+    {
+        try
+            {
+            await channel.SendMessageAsync(message, components: messageComponent);
+            }
+        catch(Exception e)
+            {
+            //  If the bot has the permissions to post to a channel yet can't, something went seriously wrong
+            //  Specifying caller of HasPermissionsToWriteChannel manually is required to prevent a recursive loop from forming
+            if (HasPermissionsToWriteChannel(channel, respondTo, caller: caller == nameof(SendLogChannelMessageAsync) ? nameof(SendLogChannelMessageAsync) : nameof(SendMessageIfPermittedAsync)))
+                SendLog(LogEventLevel.Error, channel.Guild.Id, "Fatal error occurred sending message in channel {ChannelId}", channel.Id, exep: e);
+            }
+    }
+
+    private async Task SendNicknamePoll(SocketTextChannel channel, SocketSlashCommand? command = null)
     {
         var confirmationButton = new ComponentBuilder()
                 .WithButton("Get Started", "start-nickname-process");
-            if (HasPermissionsToWriteChannel(channel))
-            {
-                await channel.SendMessageAsync($"To get started, press this button so we can set you up properly:", components: confirmationButton.Build());
-            }
-            else
-            {
-            SendLog(LogEventLevel.Warning, channel.Guild.Id, "Missing permissions to send nickname poll in channel {ChannelId}", channel.Id);
-                await SendLogChannelMessageAsync(channel.Guild.Id, "Couldn't send nickname poll: missing permissions!");
-            }
+
+        //await channel.SendMessageAsync($"To get started, press this button so we can set you up properly:", components: confirmationButton.Build());
+        await SendMessageIfPermittedAsync(channel, "To get started, press this button so we can set you up properly:", command, confirmationButton.Build());
     }
 
     List<ApplicationCommandProperties> CommandsAvailableToUser(SocketInteraction interaction)
@@ -1096,8 +1139,8 @@ public class Program
 
     private async Task SendLogChannelMessageAsync(ulong guildId, string message, [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
-        if ((await _botDatabase.getGuildByGuildIdAsync(guildId))?.Channels?.LogChannel is ulong logChannelId && _botclient.GetGuild(guildId).GetChannel(logChannelId) is SocketTextChannel logChannel && HasPermissionsToWriteChannel(logChannel))
-            await logChannel.SendMessageAsync(message);
+        if ((await _botDatabase.getGuildByGuildIdAsync(guildId))?.Channels?.LogChannel is ulong logChannelId && _botclient.GetGuild(guildId).GetChannel(logChannelId) is SocketTextChannel logChannel)
+            await SendMessageIfPermittedAsync(logChannel, message);
         else
             SendLog(LogEventLevel.Warning, guildId, "Failed to send log message. Has the log channel been set up properly?");
     }
