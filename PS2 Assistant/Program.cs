@@ -359,7 +359,7 @@ public class Program
     {
         await SendLogChannelMessageAsync(user.Guild.Id, $"User {user.Mention} joined the server");
 
-        if (await _botDatabase.getGuildByGuildIdAsync(user.Guild.Id) is Guild guild && guild.Channels?.WelcomeChannel is ulong welcomeChannelId)
+        if (await _botDatabase.GetGuildByGuildIdAsync(user.Guild.Id) is Guild guild && guild.Channels?.WelcomeChannel is ulong welcomeChannelId)
         {
             if (HasPermissionsToWriteChannel((SocketGuildChannel)_botclient.GetChannel(welcomeChannelId)))
             {
@@ -379,7 +379,7 @@ public class Program
     }
     public async Task UserLeftHandler(SocketGuild guild, SocketUser user)
     {
-        if(await _botDatabase.getGuildByGuildIdAsync(guild.Id) is Guild originalGuild && originalGuild.Users.Where(x => x.SocketUserId == user.Id).FirstOrDefault(defaultValue: null) is User savedUser)
+        if(await _botDatabase.GetGuildByGuildIdAsync(guild.Id) is Guild originalGuild && originalGuild.Users.Where(x => x.SocketUserId == user.Id).FirstOrDefault(defaultValue: null) is User savedUser)
         {
             originalGuild.Users.Remove(savedUser);
             await _botDatabase.SaveChangesAsync();
@@ -556,7 +556,7 @@ public class Program
         string nickname = socketModal.Data.Components.First().Value;
 
         //  A nickname modal can only be sent in a guild, so GuildId will not be null.
-        var findGuild = _botDatabase.getGuildByGuildIdAsync((ulong)socketModal.GuildId!);
+        var findGuild = _botDatabase.GetGuildByGuildIdAsync((ulong)socketModal.GuildId!);
         var jsonTask = _censusclient.GetStringAsync($"http://census.daybreakgames.com/s:{appSettings.GetConnectionString("CensusAPIKey")}/get/ps2:v2/character_name/?name.first_lower=*{nickname.ToLower()}&c:join=outfit_member_extended^on:character_id^inject_at:outfit^show:alias&c:limit=6&c:exactMatchFirst=true");
 
         //  Validate given nickname
@@ -913,7 +913,7 @@ public class Program
     {
         await command.DeferAsync();
 
-        if (command.GuildId is null || (await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId))?.Channels is not Channels channels)
+        if (command.GuildId is null || (await _botDatabase.GetGuildByGuildIdAsync((ulong)command.GuildId))?.Channels is not Channels channels)
         {
             SendLog(LogEventLevel.Error, command.GuildId!.Value, "No channels found in database for this guild");
             await command.RespondAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
@@ -933,7 +933,7 @@ public class Program
         }
     private async Task HandleSetWelcomeChannel(SocketSlashCommand command)
     {
-        if(command.GuildId is null || (await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId))?.Channels is not Channels channels)
+        if(command.GuildId is null || (await _botDatabase.GetGuildByGuildIdAsync((ulong)command.GuildId))?.Channels is not Channels channels)
         {
             SendLog(LogEventLevel.Error, command.GuildId!.Value, "No channels found in database for this guild");
             await command.RespondAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
@@ -956,7 +956,7 @@ public class Program
     {
         await command.DeferAsync();
 
-        if ((await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId!))?.Roles is not Roles roles)
+        if ((await _botDatabase.GetGuildByGuildIdAsync((ulong)command.GuildId!))?.Roles is not Roles roles)
         {
             SendLog(LogEventLevel.Error, command.GuildId.Value, "No roles found in database for this guild");
             await command.FollowupAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
@@ -981,7 +981,7 @@ public class Program
     {
         await command.DeferAsync();
 
-        if ((await _botDatabase.getGuildByGuildIdAsync((ulong)command.GuildId!))?.Roles is not Roles guildParameters)
+        if ((await _botDatabase.GetGuildByGuildIdAsync((ulong)command.GuildId!))?.Roles is not Roles guildParameters)
         {
             SendLog(LogEventLevel.Error, command.GuildId.Value, "No roles found in database for this guild");
             await command.FollowupAsync("Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
@@ -1139,7 +1139,7 @@ public class Program
 
     private async Task SendLogChannelMessageAsync(ulong guildId, string message, [System.Runtime.CompilerServices.CallerMemberName] string caller = "")
     {
-        if ((await _botDatabase.getGuildByGuildIdAsync(guildId))?.Channels?.LogChannel is ulong logChannelId && _botclient.GetGuild(guildId).GetChannel(logChannelId) is SocketTextChannel logChannel)
+        if ((await _botDatabase.GetGuildByGuildIdAsync(guildId))?.Channels?.LogChannel is ulong logChannelId && _botclient.GetGuild(guildId).GetChannel(logChannelId) is SocketTextChannel logChannel)
             await SendMessageIfPermittedAsync(logChannel, message);
         else
             SendLog(LogEventLevel.Warning, guildId, "Failed to send log message. Has the log channel been set up properly?");
@@ -1238,7 +1238,7 @@ public class Program
             foreach (Guild guild in _botDatabase.Guilds)
                 returnString += $"| {CLIColumn(guild.GuildId.ToString(), longestGuildIdLength)} {CLIColumn((_botclient.GetGuild(guild.GuildId).MemberCount - 1).ToString(), guildMembersLabel.Length)} {_botclient.GetGuild(guild.GuildId).Name}\n";
         }
-        else if (guildId is not null && await _botDatabase.getGuildByGuildIdAsync((ulong)guildId) is Guild guild)
+        else if (guildId is not null && await _botDatabase.GetGuildByGuildIdAsync((ulong)guildId) is Guild guild)
         {
             //  Guild, channels and roles table headers and bodies
             returnString +=
