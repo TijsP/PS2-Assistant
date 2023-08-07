@@ -7,7 +7,7 @@ public class BotContext : DbContext
     public readonly string dbLocation = "Assistant.db";
     public DbSet<Guild> Guilds => Set<Guild>();
 
-    public async Task<Guild?> getGuildByGuildIdAsync(ulong guildId)
+    public async Task<Guild?> GetGuildByGuildIdAsync(ulong guildId)
     {
         return await Guilds
             .Include(p => p.Users)
