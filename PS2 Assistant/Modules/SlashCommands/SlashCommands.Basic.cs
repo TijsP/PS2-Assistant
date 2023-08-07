@@ -112,6 +112,10 @@ namespace PS2_Assistant.Modules.SlashCommands
                 }
             }
 
+            /// <summary>
+            /// The commands available to a user, given the user's permissions
+            /// </summary>
+            /// <returns>A list of the available commands</returns>
             List<SlashCommandInfo> AvailableCommands() {
                 if (Context.Guild is null)
                     return new List<SlashCommandInfo>();
@@ -123,6 +127,11 @@ namespace PS2_Assistant.Modules.SlashCommands
                 }).ToList();
             }
 
+            /// <summary>
+            /// Generate an <see cref="Discord.EmbedBuilder"/> containing helpful information about a command
+            /// </summary>
+            /// <param name="slashCommand">The command for which to create the <see cref="Discord.EmbedBuilder"/></param>
+            /// <returns></returns>
             private static EmbedBuilder CommandHelpEmbed(SlashCommandInfo slashCommand)
             {
                 string description = slashCommand.Description;
