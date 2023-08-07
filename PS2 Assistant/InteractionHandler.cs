@@ -29,10 +29,28 @@ namespace PS2_Assistant
         public async Task InitializeAsync()
         {
             _interactionService.Log += LogHandler;
+            _interactionService.SlashCommandExecuted += SlashCommandExecutedHandler;
             await _interactionService.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
 
             _client.Ready += ClientReadyHandler;
             _client.InteractionCreated += HandleInteraction;
+        }
+
+        private async Task SlashCommandExecutedHandler(SlashCommandInfo info, IInteractionContext context, IResult result)
+        {
+            if(!result.IsSuccess)
+            {
+                switch(result.Error)
+                {
+                    case InteractionCommandError.UnmetPrecondition:
+                        await context.Interaction.RespondAsync($"Unmet precondition: {result.ErrorReason}");
+                        _logger.SendLog(LogEventLevel.Warning, context.Guild.Id, result.ErrorReason, caller: info.MethodName);
+                        break;
+                    default:
+                        await context.Interaction.RespondAsync($"An error occurred while executing: {result.ErrorReason}");
+                        break;
+                }
+            }
         }
 
         private Task LogHandler(LogMessage message)
