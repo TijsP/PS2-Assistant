@@ -100,8 +100,7 @@ namespace PS2_Assistant.Modules.SlashCommands
             {
                 if (name.StartsWith("/"))
                     name = name.TrimStart('/');
-                foreach (var info in AvailableCommands())
-                    await Console.Out.WriteLineAsync(info.Name);
+
                 if (AvailableCommands().Where(x => x.Name.ToLower() == name.ToLower()).FirstOrDefault(defaultValue: null) is SlashCommandInfo commandInfo)
                 {
                     var embed = CommandHelpEmbed(commandInfo);
