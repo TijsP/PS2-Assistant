@@ -6,7 +6,6 @@ using System.Reflection;
 
 using PS2_Assistant.Logger;
 using Serilog.Events;
-using PS2_Assistant.Modules.SlashCommands;
 
 namespace PS2_Assistant
 {

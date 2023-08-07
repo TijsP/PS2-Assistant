@@ -1,7 +1,5 @@
 ﻿using Discord;
 using Discord.Interactions;
-using Discord.WebSocket;
-using static Microsoft.EntityFrameworkCore.DbLoggerCategory.Database;
 
 namespace PS2_Assistant.Modules.SlashCommands
 {
