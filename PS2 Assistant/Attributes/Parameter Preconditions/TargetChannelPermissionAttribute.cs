@@ -4,14 +4,14 @@ using Discord.Interactions;
 namespace PS2_Assistant.Attributes
 {
     /// <summary>
-    /// Checks whether the bot has the specified permissions in the target guild channel
+    /// Checks whether the bot has the specified permissions in the target guild channel.
     /// </summary>
     public class TargetChannelPermissionAttribute : ParameterPreconditionAttribute
     {
         public ChannelPermission ChannelPermissions { get; }
 
         /// <summary>
-        /// Checks whether the bot has the specified permissions in the target channel
+        /// Checks whether the bot has the specified permissions in the target guild channel. If the target channel is left null, the target channel is assumed to be the channel where this interaction was triggered.
         /// </summary>
         /// <param name="permissions">The required permissions</param>
         public TargetChannelPermissionAttribute(ChannelPermission permissions)
@@ -24,8 +24,12 @@ namespace PS2_Assistant.Attributes
             if(parameterInfo is not CommandParameterInfo)
                 return PreconditionResult.FromError("Parameter info isn't associated with a command");
 
-            if(value is not IGuildChannel targetChannel)
-                return PreconditionResult.FromError($"Only parameters of type {parameterInfo.ParameterType} are accepted");
+            //  Using "value is not IGuildChannel? targetChannel" results in a compiler error, so instead Type.IsAssignableFrom is used
+            if(!typeof(IGuildChannel).IsAssignableFrom(parameterInfo.ParameterType))
+                return PreconditionResult.FromError($"Only parameters of type {typeof(IGuildChannel)} are accepted. Used type: {parameterInfo.ParameterType}");
+            
+            IGuildChannel? targetChannel = value as IGuildChannel;
+            targetChannel ??= context.Channel as IGuildChannel;
 
             var guildUserPerms = (await context.Guild.GetCurrentUserAsync()).GetPermissions(targetChannel);
             if (!guildUserPerms.Has(ChannelPermissions))
