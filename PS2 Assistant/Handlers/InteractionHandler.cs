@@ -63,11 +63,8 @@ namespace PS2_Assistant.Handlers
         {
             _logger.SendLog(LogEventLevel.Information, 0, "Bot ready");
 #if DEBUG
-            //  prevent duplicate commands that were previously registered globally
-            await _interactionService.AddModulesGloballyAsync(true);
-
-            await _interactionService.AddModulesToGuildAsync(Program.testGuildID, modules: _interactionService.Modules.Where(x => x.DontAutoRegister == true).ToArray());
             await _interactionService.RegisterCommandsToGuildAsync(Program.testGuildID, false);
+            await _interactionService.AddModulesToGuildAsync(Program.testGuildID, modules: _interactionService.Modules.Where(x => x.DontAutoRegister == true).ToArray());
 #else
             await _interactionService.RegisterCommandsGloballyAsync(true);
 #endif
