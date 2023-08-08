@@ -17,6 +17,20 @@ namespace PS2_Assistant.Modules.SlashCommands
         [NeedsDatabaseEntry]
         [EnabledInDm(false)]
         [DefaultMemberPermissions(GuildPermission.ManageGuild)]
+        [SlashCommand("send-welcome-message", "Whether or not to send a welcome message when a new user joins the server")]
+        public async Task SendWelcomeMessage(
+            [Summary(description: "Whether a welcome message should be sent or not")]
+            bool sendWelcomeMessage)
+        {
+            _guildDb.Guilds.Find(Context.Guild.Id)!.SendWelcomeMessage = sendWelcomeMessage;
+            await _guildDb.SaveChangesAsync();
+            _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, "Welcome messages will {Confirmation} be sent", sendWelcomeMessage ? "now" : "not");
+            await RespondAsync($"Welcome messages will {(sendWelcomeMessage ? "now" : "not")} be sent");
+        }
+
+        [NeedsDatabaseEntry]
+        [EnabledInDm(false)]
+        [DefaultMemberPermissions(GuildPermission.ManageGuild)]
         [SlashCommand("set-log-channel", "Sets the channel where this bot's log messages will be sent")]
         public async Task SetLogChannel(
             [TargetChannelPermission(AssistantUtils._channelWritePermissions)]
