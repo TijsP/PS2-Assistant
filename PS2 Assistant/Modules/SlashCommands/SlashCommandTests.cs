@@ -1,5 +1,8 @@
 ﻿using Discord;
 using Discord.Interactions;
+using Discord.WebSocket;
+
+using PS2_Assistant.Handlers;
 
 namespace PS2_Assistant.Modules.SlashCommands
 {
@@ -7,10 +10,12 @@ namespace PS2_Assistant.Modules.SlashCommands
     [DontAutoRegister]
     public class SlashCommandTests : InteractionModuleBase<SocketInteractionContext>
     {
+        private readonly ClientHandler _clientHandler;
         private readonly AssistantUtils _assistantUtils;
 
-        public SlashCommandTests(AssistantUtils assistantUtils)
+        public SlashCommandTests(ClientHandler clientHandler, AssistantUtils assistantUtils)
         {
+            _clientHandler = clientHandler;
             _assistantUtils = assistantUtils;
         }
 
@@ -31,6 +36,15 @@ namespace PS2_Assistant.Modules.SlashCommands
         {
             await RespondAsync("Sending message to channel");
             await _assistantUtils.SendMessageInChannelAsync(channel, "Test send message to channel");
+        }
+
+        [EnabledInDm(false)]
+        [SlashCommand("test-user-joined", "Test the UserJoinedHandler")]
+        public async Task TestUserJoinedHandler(SocketGuildUser? user = null)
+        {
+            await RespondAsync("Triggering UserJoinedHandler...");
+            user ??= (SocketGuildUser)Context.User;
+            await _clientHandler.UserJoinedHandler(user);
         }
     }
 }
