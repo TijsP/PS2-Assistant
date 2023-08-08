@@ -45,14 +45,11 @@ namespace PS2_Assistant
         /// <returns></returns>
         public async Task SendMessageInChannelAsync(ITextChannel targetChannel, string message)
         {
-            try
-            {
+            IGuildUser permissions = await targetChannel.GetUserAsync(_client.CurrentUser.Id);
+            if (permissions.GetPermissions(targetChannel).Has(channelWritePermissions))
                 await targetChannel.SendMessageAsync(message);
-            }
-            catch(Exception ex)
-            {
-                _logger.SendLog(LogEventLevel.Warning, targetChannel.Guild.Id, "Failed to send message to channel {ChannelId}", targetChannel.Id, exep: ex);
-            }
+            else
+                _logger.SendLog(LogEventLevel.Warning, targetChannel.Guild.Id, "Failed to send message to channel {ChannelId}, missing write permissions", targetChannel.Id);
         }
     }
 }
