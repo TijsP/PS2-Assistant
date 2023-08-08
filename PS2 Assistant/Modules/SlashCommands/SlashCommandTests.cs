@@ -30,7 +30,7 @@ namespace PS2_Assistant.Modules.SlashCommands
         public async Task TestSendMessageToChannel(ITextChannel channel)
         {
             await RespondAsync("Sending message to channel");
-            await _assistantUtils.SendMessageInChannel(channel, "Test send message to channel");
+            await _assistantUtils.SendMessageInChannelAsync(channel, "Test send message to channel");
         }
     }
 }

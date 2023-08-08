@@ -32,7 +32,7 @@ namespace PS2_Assistant
         public async Task SendLogChannelMessageAsync(ulong guildId, string message)
         {
             if ((await _guildDb.GetGuildByGuildIdAsync(guildId))?.Channels.LogChannel is ulong logChannelId && _client.GetGuild(guildId).GetChannel(logChannelId) is ITextChannel logChannel)
-                await SendMessageInChannel(logChannel, message);
+                await SendMessageInChannelAsync(logChannel, message);
             else
                 _logger.SendLog(LogEventLevel.Warning, guildId, "Failed to send log message. Has the log channel been set up properly?");
         }
@@ -43,7 +43,7 @@ namespace PS2_Assistant
         /// <param name="targetChannel">The channel where to send <paramref name="message"/> to</param>
         /// <param name="message">The message to send</param>
         /// <returns></returns>
-        public async Task SendMessageInChannel(ITextChannel targetChannel, string message)
+        public async Task SendMessageInChannelAsync(ITextChannel targetChannel, string message)
         {
             try
             {
