@@ -32,7 +32,7 @@ namespace PS2_Assistant.Modules
             targetChannel ??= (ITextChannel)Context.Channel;
 
             await FollowupAsync($"Attempting to send poll to <#{targetChannel.Id}>", ephemeral: respondEphemerally);
-            await SendPollToChannel(targetChannel);
+            await SendPollToChannelAsync(targetChannel);
         }
 
         [NeedsDatabaseEntry]
@@ -51,8 +51,12 @@ namespace PS2_Assistant.Modules
 
         }
 
-        private static async Task SendPollToChannel(
-            [TargetChannelPermission(ChannelPermission.ViewChannel | ChannelPermission.SendMessages)]
+        /// <summary>
+        /// Sends a message asking the user to start the nickname process by pressing a button.
+        /// </summary>
+        /// <param name="channel">The channel to which to send the poll to.</param>
+        /// <returns></returns>
+        public static async Task SendPollToChannelAsync(
             ITextChannel channel)
         {
             var confirmationButton = new ComponentBuilder()

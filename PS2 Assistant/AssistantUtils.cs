@@ -10,7 +10,7 @@ namespace PS2_Assistant
 {
     public class AssistantUtils
     {
-        public const ChannelPermission _channelWritePermissions = ChannelPermission.ViewChannel | ChannelPermission.SendMessages;
+        public const ChannelPermission channelWritePermissions = ChannelPermission.ViewChannel | ChannelPermission.SendMessages;
 
         private readonly DiscordSocketClient _client;
         private readonly SourceLogger _logger;
