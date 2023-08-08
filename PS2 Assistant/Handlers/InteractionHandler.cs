@@ -7,7 +7,7 @@ using System.Reflection;
 using PS2_Assistant.Logger;
 using Serilog.Events;
 
-namespace PS2_Assistant
+namespace PS2_Assistant.Handlers
 {
     public class InteractionHandler
     {
@@ -38,9 +38,9 @@ namespace PS2_Assistant
 
         private async Task SlashCommandExecutedHandler(SlashCommandInfo info, IInteractionContext context, IResult result)
         {
-            if(!result.IsSuccess)
+            if (!result.IsSuccess)
             {
-                switch(result.Error)
+                switch (result.Error)
                 {
                     case InteractionCommandError.UnmetPrecondition:
                         await context.Interaction.RespondAsync($"Unmet precondition: {result.ErrorReason}");
