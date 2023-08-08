@@ -59,6 +59,9 @@ namespace PS2_Assistant.Modules
         public static async Task SendPollToChannelAsync(
             ITextChannel channel)
         {
+            if (!(await channel.Guild.GetCurrentUserAsync()).GetPermissions(channel).Has(AssistantUtils.channelWritePermissions))
+                return;
+
             var confirmationButton = new ComponentBuilder()
                     .WithButton("Get Started", "start-nickname-process");
 
