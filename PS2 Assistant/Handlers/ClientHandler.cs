@@ -32,7 +32,33 @@ namespace PS2_Assistant.Handlers
             _client.JoinedGuild += JoinedGuildHandler;
             _client.LeftGuild += LeftGuildHandler;
 
+            _client.Ready += ReadyHandler;
+
             return Task.CompletedTask;
+        }
+
+        public async Task ReadyHandler()
+        {
+            List<ulong> subscribedGuilds = _client.Guilds.ToList().Select(x => x.Id).ToList();
+            List<ulong> addedGuilds = subscribedGuilds.Except(_guildDb.Guilds.Select(x => x.GuildId).ToList()).ToList();
+            List<ulong> removedGuilds = _guildDb.Guilds.Select(x => x.GuildId).ToList().Except(subscribedGuilds).ToList();
+
+            if (addedGuilds.Count != 0)
+            {
+                foreach (ulong guildId in addedGuilds)
+                {
+                    _logger.SendLog(LogEventLevel.Information, guildId, "Bot was added to guild while offline");
+                    await AddGuildAsync(guildId);
+                }
+            }
+            if (removedGuilds.Count != 0)
+            {
+                foreach (ulong guildId in removedGuilds)
+                {
+                    _logger.SendLog(LogEventLevel.Information, guildId, "Bot was removed from guild while offline");
+                    await RemoveGuildAsync(guildId);
+                }
+            }
         }
 
         public async Task UserJoinedHandler(SocketGuildUser user)
