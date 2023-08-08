@@ -1,5 +1,6 @@
 ﻿using Discord;
 using Discord.Interactions;
+using PS2_Assistant.Handlers.Autocomplete;
 
 namespace PS2_Assistant.Modules.SlashCommands
 {
@@ -92,8 +93,9 @@ namespace PS2_Assistant.Modules.SlashCommands
 
             [SlashCommand("command", "Get help for a specific command")]
             public async Task Command(
-                [Summary(description: "The name of the command")]
-            string name
+                [Summary(description: "The name of the command"),
+                Autocomplete(typeof(HelpAutocompleteHandler))]
+                string name
                 )
             {
                 if (name.StartsWith("/"))
