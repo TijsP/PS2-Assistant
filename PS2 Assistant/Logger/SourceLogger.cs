@@ -44,19 +44,19 @@ namespace PS2_Assistant.Logger
             using (LogContext.PushProperty("GuildId", guildId))
                 _logger.Write(level, exep, template);
         }
-        public void SendLog<T>(LogEventLevel level, ulong guildId, string template, T prop, Exception? exep = null, [CallerMemberName] string caller = "")
+        public void SendLog<T>(LogEventLevel level, ulong? guildId, string template, T prop, Exception? exep = null, [CallerMemberName] string caller = "")
         {
             using (LogContext.PushProperty("Source", caller))
             using (LogContext.PushProperty("GuildId", guildId))
                 _logger.Write(level, exep, template, prop);
         }
-        public void SendLog<T0, T1>(LogEventLevel level, ulong guildId, string template, T0 prop0, T1 prop1, Exception? exep = null, [CallerMemberName] string caller = "")
+        public void SendLog<T0, T1>(LogEventLevel level, ulong? guildId, string template, T0 prop0, T1 prop1, Exception? exep = null, [CallerMemberName] string caller = "")
         {
             using (LogContext.PushProperty("Source", caller))
             using (LogContext.PushProperty("GuildId", guildId))
                 _logger.Write(level, exep, template, prop0, prop1);
         }
-        public void SendLog<T0, T1, T2>(LogEventLevel level, ulong guildId, string template, T0 prop0, T1 prop1, T2 prop2, Exception? exep = null, [CallerMemberName] string caller = "")
+        public void SendLog<T0, T1, T2>(LogEventLevel level, ulong? guildId, string template, T0 prop0, T1 prop1, T2 prop2, Exception? exep = null, [CallerMemberName] string caller = "")
         {
             using (LogContext.PushProperty("Source", caller))
             using (LogContext.PushProperty("GuildId", guildId))
