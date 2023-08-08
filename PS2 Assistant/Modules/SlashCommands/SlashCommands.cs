@@ -13,8 +13,6 @@ namespace PS2_Assistant.Modules.SlashCommands
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
 
-        private const ChannelPermission _channelWritePermissions = ChannelPermission.ViewChannel | ChannelPermission.SendMessages;
-
         public SlashCommands(BotContext guildDb, SourceLogger logger, HttpClient httpClient, IConfiguration configuration)
         {
             _guildDb = guildDb;

@@ -19,7 +19,7 @@ namespace PS2_Assistant.Modules.SlashCommands
         [DefaultMemberPermissions(GuildPermission.ManageGuild)]
         [SlashCommand("set-log-channel", "Sets the channel where this bot's log messages will be sent")]
         public async Task SetLogChannel(
-            [TargetChannelPermission(_channelWritePermissions)]
+            [TargetChannelPermission(AssistantUtils._channelWritePermissions)]
             [Summary(description: "Sets the log channel")]
             ITextChannel logChannel)
         {
@@ -38,7 +38,7 @@ namespace PS2_Assistant.Modules.SlashCommands
         [DefaultMemberPermissions(GuildPermission.ManageGuild)]
         [SlashCommand("set-welcome-channel", "Sets the channel where new users will be greeted by the bot")]
         public async Task SetWelcomeChannel(
-            [TargetChannelPermission(_channelWritePermissions)]
+            [TargetChannelPermission(AssistantUtils._channelWritePermissions)]
             [Summary(description: "Sets the welcome channel")]
             ITextChannel welcomeChannel)
         {
