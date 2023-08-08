@@ -46,5 +46,15 @@ namespace PS2_Assistant.Modules.SlashCommands
             user ??= (SocketGuildUser)Context.User;
             await _clientHandler.UserJoinedHandler(user);
         }
+
+
+        [EnabledInDm(false)]
+        [SlashCommand("test-user-left", "Test the UserLeftHandler")]
+        public async Task TestUserLeftHandler(SocketGuildUser? user = null)
+        {
+            await RespondAsync("Triggering UserLeftHandler...");
+            user ??= (SocketGuildUser)Context.User;
+            await _clientHandler.UserLeftHandler(Context.Guild, user);
+        }
     }
 }

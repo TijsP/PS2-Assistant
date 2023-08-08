@@ -28,6 +28,7 @@ namespace PS2_Assistant.Handlers
         public Task InitializeAsync()
         {
             _client.UserJoined += UserJoinedHandler;
+            _client.UserLeft += UserLeftHandler;
 
             return Task.CompletedTask;
         }
@@ -51,6 +52,17 @@ namespace PS2_Assistant.Handlers
             }
 
             _logger.SendLog(LogEventLevel.Information, user.Guild.Id, "User {UserId} joined the guild", user.Id);
+        }
+
+        public async Task UserLeftHandler(SocketGuild guild, SocketUser user)
+        {
+            if (await _guildDb.GetGuildByGuildIdAsync(guild.Id) is Guild originalGuild && originalGuild.Users.Where(x => x.SocketUserId == user.Id).FirstOrDefault(defaultValue: null) is User savedUser)
+            {
+                originalGuild.Users.Remove(savedUser);
+                await _guildDb.SaveChangesAsync();
+            }
+
+            _logger.SendLog(LogEventLevel.Information, guild.Id, "User {UserId} left the guild", user.Id);
         }
     }
 }
