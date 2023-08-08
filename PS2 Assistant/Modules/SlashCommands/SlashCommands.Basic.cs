@@ -22,7 +22,7 @@ namespace PS2_Assistant.Modules.SlashCommands
                 int commandsPerPage = 4)
             {
                 List<Embed> embeds = new();
-                List<SlashCommandInfo> availableCommands = AvailableCommands();
+                List<SlashCommandInfo> availableCommands = AvailableCommands(Context, Commands);
                 int totalPages = (int)Math.Ceiling((double)availableCommands.Count / commandsPerPage);
 
                 if (number > totalPages)
@@ -99,7 +99,7 @@ namespace PS2_Assistant.Modules.SlashCommands
                 if (name.StartsWith("/"))
                     name = name.TrimStart('/');
 
-                if (AvailableCommands().Where(x => x.Name.ToLower() == name.ToLower()).FirstOrDefault(defaultValue: null) is SlashCommandInfo commandInfo)
+                if (AvailableCommands(Context, Commands).Where(x => x.Name.ToLower() == name.ToLower()).FirstOrDefault(defaultValue: null) is SlashCommandInfo commandInfo)
                 {
                     var embed = CommandHelpEmbed(commandInfo);
                     await RespondAsync(embed: embed.Build());
@@ -114,12 +114,12 @@ namespace PS2_Assistant.Modules.SlashCommands
             /// The commands available to a user, given the user's permissions
             /// </summary>
             /// <returns>A list of the available commands</returns>
-            List<SlashCommandInfo> AvailableCommands() {
-                if (Context.Guild is null)
+            public static List<SlashCommandInfo> AvailableCommands(SocketInteractionContext context, InteractionService commands) {
+                if (context.Guild is null)
                     return new List<SlashCommandInfo>();
-                return Commands.SlashCommands.Where(x => {
+                return commands.SlashCommands.Where(x => {
                     if (x.DefaultMemberPermissions is not null)
-                        return Context.Guild.GetUser(Context.User.Id).GuildPermissions.Has(x.DefaultMemberPermissions.Value);
+                        return context.Guild.GetUser(context.User.Id).GuildPermissions.Has(x.DefaultMemberPermissions.Value);
                     else
                         return true;
                 }).ToList();
