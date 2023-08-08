@@ -29,6 +29,8 @@ namespace PS2_Assistant.Handlers
         {
             _client.UserJoined += UserJoinedHandler;
             _client.UserLeft += UserLeftHandler;
+            _client.JoinedGuild += JoinedGuildHandler;
+            _client.LeftGuild += LeftGuildHandler;
 
             return Task.CompletedTask;
         }
@@ -63,6 +65,36 @@ namespace PS2_Assistant.Handlers
             }
 
             _logger.SendLog(LogEventLevel.Information, guild.Id, "User {UserId} left the guild", user.Id);
+        }
+
+        public async Task JoinedGuildHandler(SocketGuild guild)
+        {
+            await AddGuildAsync(guild.Id);
+
+            _logger.SendLog(LogEventLevel.Information, guild.Id, "Bot was added to guild");
+        }
+        public async Task AddGuildAsync(ulong guildId)
+        {
+            if (_guildDb.Guilds.Find(guildId) is null)
+            {
+                await _guildDb.Guilds.AddAsync(new Guild { GuildId = guildId, Channels = new Channels(), Roles = new Roles() });
+                await _guildDb.SaveChangesAsync();
+            }
+        }
+
+        public async Task LeftGuildHandler(SocketGuild guild)
+        {
+            await RemoveGuildAsync(guild.Id);
+
+            _logger.SendLog(LogEventLevel.Information, guild.Id, "Bot left guild");
+        }
+        public async Task RemoveGuildAsync(ulong guildId)
+        {
+            if (_guildDb.Guilds.Find(guildId) is Guild guildToLeave)
+            {
+                _guildDb.Guilds.Remove(guildToLeave);
+                await _guildDb.SaveChangesAsync();
+            }
         }
     }
 }
