@@ -39,6 +39,7 @@ namespace PS2_Assistant.Handlers
 
         public async Task ReadyHandler()
         {
+            //  Check whether the bot was added to or removed from any guilds while offline
             List<ulong> subscribedGuilds = _client.Guilds.ToList().Select(x => x.Id).ToList();
             List<ulong> addedGuilds = subscribedGuilds.Except(_guildDb.Guilds.Select(x => x.GuildId).ToList()).ToList();
             List<ulong> removedGuilds = _guildDb.Guilds.Select(x => x.GuildId).ToList().Except(subscribedGuilds).ToList();
