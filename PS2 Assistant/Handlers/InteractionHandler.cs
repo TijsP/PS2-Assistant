@@ -1,11 +1,13 @@
-﻿using Discord;
+﻿using System.Reflection;
+using Microsoft.Extensions.Configuration;
+
+using Serilog.Events;
+
+using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
-using Microsoft.Extensions.Configuration;
-using System.Reflection;
 
 using PS2_Assistant.Logger;
-using Serilog.Events;
 
 namespace PS2_Assistant.Handlers
 {
@@ -61,13 +63,13 @@ namespace PS2_Assistant.Handlers
 
         private async Task ClientReadyHandler()
         {
-            _logger.SendLog(LogEventLevel.Information, 0, "Bot ready");
 #if DEBUG
             await _interactionService.RegisterCommandsToGuildAsync(Program.testGuildID, false);
             await _interactionService.AddModulesToGuildAsync(Program.testGuildID, modules: _interactionService.Modules.Where(x => x.DontAutoRegister == true).ToArray());
 #else
             await _interactionService.RegisterCommandsGloballyAsync(true);
 #endif
+            _logger.SendLog(LogEventLevel.Information, null, "Bot ready");
         }
 
         private async Task HandleInteraction(SocketInteraction interaction)
