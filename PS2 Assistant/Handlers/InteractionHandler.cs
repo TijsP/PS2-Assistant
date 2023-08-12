@@ -64,8 +64,8 @@ namespace PS2_Assistant.Handlers
         private async Task ClientReadyHandler()
         {
 #if DEBUG
-            await _interactionService.RegisterCommandsToGuildAsync(Program.testGuildID, false);
-            await _interactionService.AddModulesToGuildAsync(Program.testGuildID, modules: _interactionService.Modules.Where(x => x.DontAutoRegister == true).ToArray());
+            await _interactionService.RegisterCommandsToGuildAsync(Convert.ToUInt64(_configuration.GetConnectionString("TestGuildId")), false);
+            await _interactionService.AddModulesToGuildAsync(Convert.ToUInt64(_configuration.GetConnectionString("TestGuildId")), modules: _interactionService.Modules.Where(x => x.DontAutoRegister == true).ToArray());
 #else
             await _interactionService.RegisterCommandsGloballyAsync(true);
 #endif

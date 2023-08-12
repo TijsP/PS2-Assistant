@@ -36,7 +36,6 @@ public class Program
     private bool clientIsReady = false;
     private readonly DiscordSocketClient _botclient = new( new DiscordSocketConfig { GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildMembers });
     private readonly HttpClient _censusclient = new();
-    private readonly ulong testGuildID = 325905696652787713;
     private readonly rResponse? apiResponse;
     private readonly JsonSerializerOptions defaultCensusJsonDeserializeOptions = new() { NumberHandling = JsonNumberHandling.AllowReadingFromString, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
