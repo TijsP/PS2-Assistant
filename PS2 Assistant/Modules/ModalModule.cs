@@ -1,8 +1,10 @@
 ﻿using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Configuration;
-using Newtonsoft.Json;
 using Serilog.Events;
+
+using Newtonsoft.Json;
+using Newtonsoft.Json.Serialization;
 
 using Discord;
 using Discord.Interactions;
@@ -63,9 +65,13 @@ namespace PS2_Assistant.Modules
 
             //  Request players with this name from Census, including a few other, similar names
             string outfitDataJson = await _httpClient.GetStringAsync($"http://census.daybreakgames.com/s:{_configuration.GetConnectionString("CensusAPIKey")}/get/ps2:v2/{PlayerDataLight.CollectionQuery}&name.first_lower=*{nickname.ToLower()}");
-            
+
+            JsonSerializer serializer = new()
+            {
+                ContractResolver = new DefaultContractResolver() { NamingStrategy = new SnakeCaseNamingStrategy() }
+            };
             var returnedData = JsonConvert.DeserializeObject<CensusObjectWrapper>(outfitDataJson);
-            if (returnedData?.Data?["character_name_list"].ToObject<List<PlayerDataLight>>() is List<PlayerDataLight> playerData && returnedData.Returned.HasValue)
+            if (returnedData?.Data?["character_name_list"].ToObject<List<PlayerDataLight>>(serializer) is List<PlayerDataLight> playerData && returnedData.Returned.HasValue)
             {
                 //  If 0 is returned, no similar names were found. If more than 1 are returned and the first result is incorrect, no exact match was found
                 if (returnedData.Returned == 0 || returnedData.Returned > 1 && playerData[0].Name.FirstLower != nickname.ToLower())
