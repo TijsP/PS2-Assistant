@@ -1,5 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PS2_Assistant.Models;
+using PS2_Assistant.Models.Database;
 
 namespace PS2_Assistant.Data;
 public class BotContext : DbContext
@@ -7,7 +7,7 @@ public class BotContext : DbContext
     public readonly string dbLocation = "Assistant.db";
     public DbSet<Guild> Guilds => Set<Guild>();
 
-    public async Task<Guild?> getGuildByGuildIdAsync(ulong guildId)
+    public async Task<Guild?> GetGuildByGuildIdAsync(ulong guildId)
     {
         return await Guilds
             .Include(p => p.Users)
