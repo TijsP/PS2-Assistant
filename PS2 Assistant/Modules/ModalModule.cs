@@ -1,16 +1,16 @@
-﻿using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 
 using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
 using Serilog.Events;
 
 using Discord;
 using Discord.Interactions;
 
+using PS2_Assistant.Attributes.Preconditions;
 using PS2_Assistant.Data;
 using PS2_Assistant.Logger;
-using PS2_Assistant.Attributes.Preconditions;
+using PS2_Assistant.Models.Census.API;
 using PS2_Assistant.Models.Database;
 
 namespace PS2_Assistant.Modules
@@ -22,8 +22,6 @@ namespace PS2_Assistant.Modules
         private readonly HttpClient _httpClient;
         private readonly AssistantUtils _assistantUtils;
         private readonly IConfiguration _configuration;
-
-        private readonly JsonSerializerOptions defaultCensusJsonDeserializeOptions = new() { NumberHandling = JsonNumberHandling.AllowReadingFromString, PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
         public ModalModule(SourceLogger logger, BotContext guildDb, HttpClient httpClient, AssistantUtils assistantUtils, IConfiguration configuration)
         {
@@ -64,11 +62,13 @@ namespace PS2_Assistant.Modules
             _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, "User {UserId} submitted nickname: {nickname}", Context.User.Id, nickname);
 
             //  Request players with this name from Census, including a few other, similar names
-            string outfitDataJson = await _httpClient.GetStringAsync($"http://census.daybreakgames.com/s:{_configuration.GetConnectionString("CensusAPIKey")}/get/ps2:v2/character_name/?name.first_lower=*{nickname.ToLower()}&c:join=outfit_member_extended^on:character_id^inject_at:outfit^show:alias&c:limit=6&c:exactMatchFirst=true"); ;
-            if (JsonSerializer.Deserialize<rReturnedPlayerDataLight>(outfitDataJson, defaultCensusJsonDeserializeOptions) is rReturnedPlayerDataLight playerData && playerData.returned.HasValue)
+            string outfitDataJson = await _httpClient.GetStringAsync($"http://census.daybreakgames.com/s:{_configuration.GetConnectionString("CensusAPIKey")}/get/ps2:v2/{PlayerDataLight.CollectionQuery}&name.first_lower=*{nickname.ToLower()}");
+            
+            var returnedData = JsonConvert.DeserializeObject<CensusObjectWrapper>(outfitDataJson);
+            if (returnedData?.Data?["character_name_list"].ToObject<List<PlayerDataLight>>() is List<PlayerDataLight> playerData && returnedData.Returned.HasValue)
             {
                 //  If 0 is returned, no similar names were found. If more than 1 are returned and the first result is incorrect, no exact match was found
-                if (playerData?.returned == 0 || playerData?.returned > 1 && playerData.character_name_list[0].name.first_lower != nickname.ToLower())
+                if (returnedData.Returned == 0 || returnedData.Returned > 1 && playerData[0].Name.FirstLower != nickname.ToLower())
                 {
                     _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, "Unable to find a match for name {nickname} in the Census database. Dumping returned JSON string as a debug log message.", nickname);
                     _logger.SendLog(LogEventLevel.Debug, Context.Guild.Id, "Unable to find match for {nickname} using Census API. Returned JSON:\n{json}", nickname, outfitDataJson);
@@ -84,9 +84,9 @@ namespace PS2_Assistant.Modules
                     await ModifyOriginalResponseAsync(x => x.Content = "Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
                     return;
                 }
-                
+
                 //  Set the Discord nickname of the user, including outfit tag and either the member or non-member role, as defined by the guild admin
-                string? alias = playerData?.character_name_list[0].outfit.alias;
+                string? alias = playerData[0].Outfit.Alias;
                 if (Context.User is IGuildUser guildUser)
                 {
 
