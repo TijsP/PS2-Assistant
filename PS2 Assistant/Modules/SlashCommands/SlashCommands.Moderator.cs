@@ -9,6 +9,7 @@ using Discord.WebSocket;
 
 using PS2_Assistant.Attributes;
 using PS2_Assistant.Attributes.Preconditions;
+using PS2_Assistant.Models.Database;
 
 namespace PS2_Assistant.Modules.SlashCommands
 {
