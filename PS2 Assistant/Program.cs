@@ -42,12 +42,12 @@ public class Program
         }
 
         //  Setup the logger
-        string outputTemplate = "[{@t:HH:mm:ss} {@l:u3}] [{Source}]{#if GuildId is not null} (Guild: {GuildId}){#end} {@m:lj}\n{@e}";
+        string outputTemplate = "[{@t:yyyy-MM-dd HH:mm:ss} {@l:u3}] [{Source}]{#if GuildId is not null} (Guild: {GuildId}){#end} {@m:lj}\n{@e}";
         var expression = new ExpressionTemplate(outputTemplate, theme: TemplateTheme.Literate);
         ILogger sLogger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .Enrich.FromLogContext()
-            .WriteTo.File(new JsonFormatter(), "Logs/log.json")
+            .WriteTo.File(new JsonFormatter(), "Logs/log.json", rollingInterval: RollingInterval.Day)
             .WriteTo.Seq(appSettings.GetConnectionString("LoggerURL")!, apiKey: appSettings.GetConnectionString("LoggerAPIKey"))
             .WriteTo.Console(expression)
             .CreateLogger();
