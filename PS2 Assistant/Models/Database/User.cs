@@ -1,5 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
-
+﻿namespace PS2_Assistant.Models.Database;
 public class User
 {
     public int Id { get; set; }

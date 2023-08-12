@@ -10,8 +10,8 @@ using Discord.Interactions;
 
 using PS2_Assistant.Data;
 using PS2_Assistant.Logger;
-using PS2_Assistant.Models;
 using PS2_Assistant.Attributes.Preconditions;
+using PS2_Assistant.Models.Database;
 
 namespace PS2_Assistant.Modules
 {

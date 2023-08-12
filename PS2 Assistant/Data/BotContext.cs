@@ -1,5 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PS2_Assistant.Models;
+using PS2_Assistant.Models.Database;
 
 namespace PS2_Assistant.Data;
 public class BotContext : DbContext

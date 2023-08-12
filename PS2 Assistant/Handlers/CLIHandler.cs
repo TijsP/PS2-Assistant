@@ -5,7 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using Discord.WebSocket;
 
 using PS2_Assistant.Data;
-using PS2_Assistant.Models;
+using PS2_Assistant.Models.Database;
 
 namespace PS2_Assistant.Handlers
 {

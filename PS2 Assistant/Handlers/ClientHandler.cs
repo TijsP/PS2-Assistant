@@ -5,8 +5,8 @@ using Serilog.Events;
 
 using PS2_Assistant.Data;
 using PS2_Assistant.Logger;
-using PS2_Assistant.Models;
 using PS2_Assistant.Modules;
+using PS2_Assistant.Models.Database;
 
 namespace PS2_Assistant.Handlers
 {

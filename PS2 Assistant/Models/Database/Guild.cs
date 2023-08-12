@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace PS2_Assistant.Models;
+namespace PS2_Assistant.Models.Database;
 public class Guild
 {
     [Key]
