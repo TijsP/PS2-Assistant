@@ -36,9 +36,7 @@ public class Program
             _appSettings.GetConnectionString("LoggerAPIKey") is null ||
             _appSettings.GetConnectionString("TestGuildId") is null)
         {
-            var exception = new KeyNotFoundException("Missing connection strings in appsettings.json");
-            await Console.Out.WriteLineAsync(Newtonsoft.Json.JsonConvert.SerializeObject(exception));
-            throw exception;
+            throw new KeyNotFoundException("Missing connection strings in appsettings.json");
         }
 
         //  Setup the logger
