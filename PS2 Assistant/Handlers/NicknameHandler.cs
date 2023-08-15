@@ -98,11 +98,17 @@ namespace PS2_Assistant.Handlers
                     await targetUser.ModifyAsync(x => x.Nickname = $"[{alias}] {nickname}");
                     if (guild.OutfitTag is not null && alias?.ToLower() == guild.OutfitTag.ToLower() && guild.Roles?.MemberRole is ulong memberRoleId)
                     {
+                        if (guild.Roles.NonMemberRole is ulong nonMemberRole && targetUser.RoleIds.Contains(nonMemberRole))
+                            await targetUser.RemoveRoleAsync(nonMemberRole);
+
                         await targetUser.AddRoleAsync(memberRoleId);
                         _logger.SendLog(LogEventLevel.Information, context.Guild.Id, "Added role {MemberRoleId} to user {UserId}", memberRoleId, targetUser.Id);
                     }
                     else if (guild.OutfitTag is not null && alias?.ToLower() != guild.OutfitTag.ToLower() && guild.Roles?.NonMemberRole is ulong nonMemberRoleId)
                     {
+                        if (guild.Roles.MemberRole is ulong memberRole && targetUser.RoleIds.Contains(memberRole))
+                            await targetUser.RemoveRoleAsync(memberRole);
+
                         await targetUser.AddRoleAsync(nonMemberRoleId);
                         _logger.SendLog(LogEventLevel.Information, context.Guild.Id, "Added role {NonMemberId} to user {UserId}", nonMemberRoleId, targetUser.Id);
                     }
