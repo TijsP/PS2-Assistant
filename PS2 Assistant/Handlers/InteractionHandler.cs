@@ -32,6 +32,7 @@ namespace PS2_Assistant.Handlers
         {
             _interactionService.Log += LogHandler;
             _interactionService.SlashCommandExecuted += SlashCommandExecutedHandler;
+            _interactionService.ComponentCommandExecuted += ComponentCommandExecutedHandler;
             await _interactionService.AddModulesAsync(Assembly.GetEntryAssembly(), _services);
 
             _client.Ready += ClientReadyHandler;
@@ -40,16 +41,33 @@ namespace PS2_Assistant.Handlers
 
         private async Task SlashCommandExecutedHandler(SlashCommandInfo info, IInteractionContext context, IResult result)
         {
+            await CheckResultAsync(info, context, result);
+        }
+
+        private async Task ComponentCommandExecutedHandler(ComponentCommandInfo info, IInteractionContext context, IResult result)
+        {
+            await CheckResultAsync(info, context, result);
+        }
+
+        private async Task CheckResultAsync(ICommandInfo info, IInteractionContext context, IResult result)
+        {
             if (!result.IsSuccess)
             {
                 switch (result.Error)
                 {
                     case InteractionCommandError.UnmetPrecondition:
-                        await context.Interaction.RespondAsync($"Unmet precondition: {result.ErrorReason}");
+                        if (context.Interaction.HasResponded)
+                            await context.Interaction.FollowupAsync($"Unmet precondition for user <@{context.User.Id}>: {result.ErrorReason}", allowedMentions: AllowedMentions.None);
+                        else
+                            await context.Interaction.RespondAsync($"Unmet precondition for user <@{context.User.Id}>: {result.ErrorReason}", allowedMentions: AllowedMentions.None);
                         _logger.SendLog(LogEventLevel.Warning, context.Guild.Id, result.ErrorReason, caller: info.MethodName);
                         break;
                     default:
-                        await context.Interaction.RespondAsync($"An error occurred while executing: {result.ErrorReason}");
+                        if (context.Interaction.HasResponded)
+                            await context.Interaction.FollowupAsync($"An error occurred while executing: {result.ErrorReason}");
+                        else
+                            await context.Interaction.RespondAsync($"An error occurred while executing: {result.ErrorReason}");
+                        _logger.SendLog(LogEventLevel.Warning, context.Guild.Id, result.ErrorReason, caller: info.MethodName);
                         break;
                 }
             }

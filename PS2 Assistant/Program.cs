@@ -23,18 +23,18 @@ public class Program
     private readonly DiscordSocketClient _botclient = new( new DiscordSocketConfig { GatewayIntents = GatewayIntents.AllUnprivileged | GatewayIntents.GuildMembers });
     private readonly HttpClient _censusclient = new();
     private readonly BotContext _botDatabase = new();
-    private readonly IConfiguration appSettings = new ConfigurationBuilder().AddJsonFile("appsettings.json").SetBasePath(Environment.CurrentDirectory).Build();
+    private readonly IConfiguration _appSettings = new ConfigurationBuilder().AddJsonFile("appsettings.json").SetBasePath(Environment.CurrentDirectory).Build();
 
     public static Task Main() => new Program().MainAsync();
 
     public async Task MainAsync()
     {
         //  Ensure all required strings are specified
-        if (appSettings.GetConnectionString("CensusAPIKey") is null ||
-            appSettings.GetConnectionString("DiscordBotToken") is null ||
-            appSettings.GetConnectionString("LoggerURL") is null ||
-            appSettings.GetConnectionString("LoggerAPIKey") is null ||
-            appSettings.GetConnectionString("TestGuildId") is null)
+        if (_appSettings.GetConnectionString("CensusAPIKey") is null ||
+            _appSettings.GetConnectionString("DiscordBotToken") is null ||
+            _appSettings.GetConnectionString("LoggerURL") is null ||
+            _appSettings.GetConnectionString("LoggerAPIKey") is null ||
+            _appSettings.GetConnectionString("TestGuildId") is null)
         {
             var exception = new KeyNotFoundException("Missing connection strings in appsettings.json");
             await Console.Out.WriteLineAsync(Newtonsoft.Json.JsonConvert.SerializeObject(exception));
@@ -48,7 +48,7 @@ public class Program
             .MinimumLevel.Debug()
             .Enrich.FromLogContext()
             .WriteTo.File(new JsonFormatter(), "Logs/log.json", rollingInterval: RollingInterval.Day)
-            .WriteTo.Seq(appSettings.GetConnectionString("LoggerURL")!, apiKey: appSettings.GetConnectionString("LoggerAPIKey"))
+            .WriteTo.Seq(_appSettings.GetConnectionString("LoggerURL")!, apiKey: _appSettings.GetConnectionString("LoggerAPIKey"))
             .WriteTo.Console(expression)
             .CreateLogger();
         SourceLogger _logger = new(sLogger);
@@ -58,16 +58,17 @@ public class Program
 
         //  Setup services collection
         IServiceProvider _services = new ServiceCollection()
-            .AddSingleton(appSettings)
+            .AddSingleton(_appSettings)
             .AddSingleton(_botclient)
-            .AddSingleton(_logger)
-            .AddSingleton(_censusclient)
-            .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>(), new InteractionServiceConfig { LogLevel = LogSeverity.Verbose }))
-            .AddSingleton<ClientHandler>()
-            .AddSingleton<InteractionHandler>()
             .AddSingleton(_botDatabase)
-            .AddSingleton<AssistantUtils>()
+            .AddSingleton(_censusclient)
+            .AddSingleton(_logger)
+            .AddSingleton<ClientHandler>()
             .AddSingleton<CLIHandler>()
+            .AddSingleton<InteractionHandler>()
+            .AddSingleton<NicknameHandler>()
+            .AddSingleton<AssistantUtils>()
+            .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>(), new InteractionServiceConfig { LogLevel = LogSeverity.Verbose }))
             .BuildServiceProvider();
 
 
@@ -78,7 +79,7 @@ public class Program
         await _services.GetRequiredService<InteractionHandler>().InitializeAsync();
         await _services.GetRequiredService<ClientHandler>().InitializeAsync();
 
-        await _botclient.LoginAsync(TokenType.Bot, appSettings.GetConnectionString("DiscordBotToken"));
+        await _botclient.LoginAsync(TokenType.Bot, _appSettings.GetConnectionString("DiscordBotToken"));
         await _botclient.StartAsync();
 
         //  Setup Census API HTTP client
