@@ -4,11 +4,14 @@ using Discord.Interactions;
 using Serilog.Events;
 
 using PS2_Assistant.Logger;
+using PS2_Assistant.Attributes.Preconditions;
 
 namespace PS2_Assistant.Modules
 {
     public class ButtonModule : InteractionModuleBase<SocketInteractionContext>
     {
+        public readonly static Dictionary<ulong, List<ulong>> usersToRegister = new();
+
         private readonly SourceLogger _logger;
 
         public ButtonModule(SourceLogger logger)
@@ -22,6 +25,43 @@ namespace PS2_Assistant.Modules
             _logger.SendLog(LogEventLevel.Debug, Context.Guild.Id, "User {UserId} started the nickname process", Context.User.Id);
 
             await RespondWithModalAsync<ModalModule.NicknameModal>("nickname-modal");
+        }
+
+        [RequireGuildPermission(GuildPermission.ManageGuild)]
+        [ComponentInteraction("put-user-in-register-list:*,*")]
+        public async Task AddToRegisterList(string shouldRegisterUser, string userId)
+        {
+            await DeferAsync();
+            ulong userToRegisterId = Convert.ToUInt64(userId);
+
+            if (Convert.ToBoolean(shouldRegisterUser))
+            {
+                if (!usersToRegister.ContainsKey(Context.Guild.Id))
+                {
+                    usersToRegister.Add(Context.Guild.Id, new List<ulong>());
+                }
+                usersToRegister[Context.Guild.Id].Add(userToRegisterId);
+                await ModifyOriginalResponseAsync(x => { x.Content = $"Added user <@{userToRegisterId}> to the list of users to be registered"; x.Components = null; x.AllowedMentions = AllowedMentions.None; });
+            }
+            else
+            {
+                await ModifyOriginalResponseAsync(x => { x.Content = $"Excluded user <@{userToRegisterId}> from the list of users to be registered"; x.Components = null; x.AllowedMentions = AllowedMentions.None; });
+            }
+            _logger.SendLog(LogEventLevel.Debug, Context.Guild.Id, $"User {Context.User.Id} chose {(Convert.ToBoolean(shouldRegisterUser) ? "" : "not ")}to register user {userToRegisterId}");
+
+            //  The Users collection is not guaranteed to be up to date. If it's not, all users will have to be downloaded
+            if (Context.Guild.Users.Count != Context.Guild.MemberCount)
+                await Context.Guild.DownloadUsersAsync();
+
+            int indexOfNextUser = Context.Guild.Users.ToList().FindIndex(x => x.Id == userToRegisterId) + 1;
+            if (indexOfNextUser > Context.Guild.Users.Count - 1)
+            {
+                _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, $"Added {usersToRegister[Context.Guild.Id].Count} to the list of users to be registered");
+                await FollowupAsync("All members have been presented! Please run `/register-selected-users` to complete the process");
+                return;
+            }
+
+            await FollowupAsync($"Does the nickname of user <@{Context.Guild.Users.ElementAt(indexOfNextUser).Id}> equal their in-game username?", components: RegisterUserButtons(Context.Guild.Users.ElementAt(indexOfNextUser).Id), allowedMentions: AllowedMentions.None);
         }
 
         public static MessageComponent RegisterUserButtons(ulong userId)
