@@ -94,6 +94,12 @@ namespace PS2_Assistant.Modules
         [SlashCommand("register-selected-users", "Registers the users that have been selected using /register-users-manually")]
         public async Task RegisterSelectedUsers()
         {
+            if (ButtonModule.usersToRegister[Context.Guild.Id].Count == 0)
+            {
+                await RespondAsync("No users have been selected");
+                return;
+            }
+
             await RespondAsync("Registering users...");
             foreach (var userId in ButtonModule.usersToRegister[Context.Guild.Id])
             {
