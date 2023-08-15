@@ -76,8 +76,14 @@ namespace PS2_Assistant.Modules
 
                 //  exclude potential outfit tags from the nickname
                 nickname = Regex.Split(nickname, @"(?<=[\[\]])").First(x => !x.Contains('[') && !x.Contains(']')).Trim();
-
-                await _nicknameHandler.VerifyNicknameAsync(Context, nickname, userToRegister);
+                try
+                {
+                    await _nicknameHandler.VerifyNicknameAsync(Context, nickname, userToRegister);
+                }
+                catch (Exception ex)
+                {
+                    _logger.SendLog(LogEventLevel.Warning, Context.Guild.Id, $"Fatal error setting nickname of user {userToRegister.Id} ({nickname})", exep: ex);
+                }
                 return;
             }
 
@@ -109,7 +115,17 @@ namespace PS2_Assistant.Modules
                 //  exclude potential outfit tags from the nickname
                 nickname = Regex.Split(nickname, @"(?<=[\[\]])").First(x => !x.Contains('[') && !x.Contains(']')).Trim();
 
-                await _nicknameHandler.VerifyNicknameAsync(Context, nickname, userToRegister);
+                try
+                {
+                    await _nicknameHandler.VerifyNicknameAsync(Context, nickname, userToRegister);
+                }catch (Exception ex)
+                {
+                    _logger.SendLog(LogEventLevel.Warning, Context.Guild.Id, $"Fatal error setting nickname of user {userToRegister.Id} ({nickname}), continuing with the next user", exep: ex);
+                    if (ex is NullReferenceException)
+                        continue;
+                }
+
+                await FollowupAsync($"Nickname assigned to <@{userToRegister.Id}>");
             }
 
             //  Ensure the current user entries in the list aren't needlessly iterated over again
