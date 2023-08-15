@@ -62,7 +62,7 @@ namespace PS2_Assistant.Modules
 
         [NeedsDatabaseEntry]
         [DefaultMemberPermissions(GuildPermission.ManageGuild)]
-        [SlashCommand("register-users-manually", "Asks you for each user whether their Discord nickname is equal to their in-game character name")]
+        [SlashCommand("register-users-manually", "Asks whether a users Discord nickname matches their in-game name and marks them to be registered")]
         public async Task RegisterUsersManually(
             [Summary(description: "If specified, only this user will be registered")]
             SocketGuildUser? userToRegister = null)
