@@ -63,13 +63,29 @@ namespace PS2_Assistant.Modules
         [NeedsDatabaseEntry]
         [DefaultMemberPermissions(GuildPermission.ManageGuild)]
         [SlashCommand("register-users-manually", "Asks you for each user whether their Discord nickname is equal to their in-game character name")]
-        public async Task RegisterUsersManually(SocketGuildUser user)
+        public async Task RegisterUsersManually(
+            [Summary(description: "If specified, only this user will be registered")]
+            SocketGuildUser? userToRegister = null)
         {
+            if(userToRegister is not null)
+            {
+                _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, $"User {Context.User.Id} registered user {userToRegister.Id}");
+                await RespondAsync("Registering user...");
+
+                string nickname = userToRegister.Nickname.IsNullOrEmpty() ? userToRegister.DisplayName : userToRegister.Nickname;
+
+                //  exclude potential outfit tags from the nickname
+                nickname = Regex.Split(nickname, @"(?<=[\[\]])").First(x => !x.Contains('[') && !x.Contains(']')).Trim();
+
+                await _nicknameHandler.VerifyNicknameAsync(Context, nickname, userToRegister);
+                return;
+            }
+
             //  The Users collection is not guaranteed to be up to date. If it's not, all users will have to be downloaded
             if (Context.Guild.Users.Count != Context.Guild.MemberCount)
                 await Context.Guild.DownloadUsersAsync();
 
-            _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, $"User {Context.User.Id} started to register users manually");
+            _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, $"User {Context.User.Id} started to register all users manually");
             await RespondAsync($"Does the nickname of user <@{Context.Guild.Users.ElementAt(0).Id}> equal their in-game username?", components: ButtonModule.RegisterUserButtons(Context.Guild.Users.ElementAt(0).Id), allowedMentions: AllowedMentions.None);
         }
 
