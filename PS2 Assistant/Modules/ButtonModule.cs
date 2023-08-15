@@ -23,5 +23,13 @@ namespace PS2_Assistant.Modules
 
             await RespondWithModalAsync<ModalModule.NicknameModal>("nickname-modal");
         }
+
+        public static MessageComponent RegisterUserButtons(ulong userId)
+        {
+            var buttons = new ComponentBuilder()
+                .WithButton("Yes, Register User", $"put-user-in-register-list:{true},{userId}")
+                .WithButton("No, Skip User", $"put-user-in-register-list:{false},{userId}");
+            return buttons.Build();
+        }
     }
 }
