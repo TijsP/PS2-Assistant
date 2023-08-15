@@ -105,6 +105,9 @@ namespace PS2_Assistant.Modules
 
                 await _nicknameHandler.VerifyNicknameAsync(Context, nickname, userToRegister);
             }
+
+            //  Ensure the current user entries in the list aren't needlessly iterated over again
+            ButtonModule.usersToRegister.Remove(Context.Guild.Id);
         }
 
         /// <summary>
