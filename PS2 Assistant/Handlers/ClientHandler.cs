@@ -64,9 +64,20 @@ namespace PS2_Assistant.Handlers
 
         public async Task UserJoinedHandler(SocketGuildUser user)
         {
-            await _utils.SendLogChannelMessageAsync(user.Guild.Id, $"User {user.Mention} joined the server");
+            if (user.IsBot)
+            {
+                await _utils.SendLogChannelMessageAsync(user.Guild.Id, $"Bot {user.Mention} joined the server");
+                _logger.SendLog(LogEventLevel.Information, user.Guild.Id, "Bot {BotId} joined the guild", user.Id);
+                return;
+            }
 
-            if (await _guildDb.GetGuildByGuildIdAsync(user.Guild.Id) is Guild guild && guild.Channels.WelcomeChannel is ulong welcomeChannelId && _client.GetChannel(welcomeChannelId) is ITextChannel welcomeChannel)
+            await _utils.SendLogChannelMessageAsync(user.Guild.Id, $"User {user.Mention} joined the server");
+            _logger.SendLog(LogEventLevel.Information, user.Guild.Id, "User {UserId} joined the guild", user.Id);
+
+            if (await _guildDb.GetGuildByGuildIdAsync(user.Guild.Id) is not Guild guild)
+                return;
+
+            if (guild.Channels.WelcomeChannel is ulong welcomeChannelId && _client.GetChannel(welcomeChannelId) is ITextChannel welcomeChannel)
             {
                 //  Both SendMessageInChannelAsync and SendPollToChannelAsync already check for bot write permissions, so this check can be omitted here
                 if (guild.SendWelcomeMessage)
@@ -76,11 +87,13 @@ namespace PS2_Assistant.Handlers
             }
             else
             {
-                await _utils.SendLogChannelMessageAsync(user.Guild.Id, "Can't send welcome message: no welcome channel set!");
+                if (guild.SendWelcomeMessage)
+                    await _utils.SendLogChannelMessageAsync(user.Guild.Id, "Can't send welcome message: no welcome channel set!");
+                if (guild.AskNicknameUponWelcome)
+                    await _utils.SendLogChannelMessageAsync(user.Guild.Id, "Can't send nickname poll: no welcome channel set!");
+
                 _logger.SendLog(LogEventLevel.Warning, user.Guild.Id, "No welcome channel set");
             }
-
-            _logger.SendLog(LogEventLevel.Information, user.Guild.Id, "User {UserId} joined the guild", user.Id);
         }
 
         public async Task UserLeftHandler(SocketGuild guild, SocketUser user)
