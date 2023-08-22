@@ -64,6 +64,13 @@ namespace PS2_Assistant.Handlers
 
         public async Task UserJoinedHandler(SocketGuildUser user)
         {
+            if (user.IsBot)
+            {
+                await _utils.SendLogChannelMessageAsync(user.Guild.Id, $"Bot {user.Mention} joined the server");
+                _logger.SendLog(LogEventLevel.Information, user.Guild.Id, "Bot {BotId} joined the guild", user.Id);
+                return;
+            }
+
             await _utils.SendLogChannelMessageAsync(user.Guild.Id, $"User {user.Mention} joined the server");
             _logger.SendLog(LogEventLevel.Information, user.Guild.Id, "User {UserId} joined the guild", user.Id);
 
