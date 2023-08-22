@@ -65,24 +65,31 @@ namespace PS2_Assistant.Modules
         [SlashCommand("register-users-manually", "Asks whether a users Discord nickname matches their in-game name and marks them to be registered")]
         public async Task RegisterUsersManually(
             [Summary(description: "If specified, only this user will be registered")]
-            SocketGuildUser? userToRegister = null)
+            SocketGuildUser? userToRegister = null,
+            [Summary(description: "The in-game character name to register the user by")]
+            string? characterName = null)
         {
-            if(userToRegister is not null)
+            if(userToRegister is null && characterName is not null)
+            {
+                await RespondAsync("Couldn't assign a nickname: no user was specified!");
+                return;
+            }
+            else if(userToRegister is not null)
             {
                 _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, $"User {Context.User.Id} registered user {userToRegister.Id}");
                 await RespondAsync("Registering user...");
 
-                string nickname = userToRegister.Nickname.IsNullOrEmpty() ? userToRegister.DisplayName : userToRegister.Nickname;
+                characterName ??= userToRegister.Nickname.IsNullOrEmpty() ? userToRegister.DisplayName : userToRegister.Nickname;
 
                 //  exclude potential outfit tags from the nickname
-                nickname = Regex.Split(nickname, @"(?<=[\[\]])").First(x => !x.Contains('[') && !x.Contains(']')).Trim();
+                characterName = Regex.Split(characterName, @"(?<=[\[\]])").First(x => !x.Contains('[') && !x.Contains(']')).Trim();
                 try
                 {
-                    await _nicknameHandler.VerifyNicknameAsync(Context, nickname, userToRegister);
+                    await _nicknameHandler.VerifyNicknameAsync(Context, characterName, userToRegister);
                 }
                 catch (Exception ex)
                 {
-                    _logger.SendLog(LogEventLevel.Warning, Context.Guild.Id, $"Fatal error setting nickname of user {userToRegister.Id} ({nickname})", exep: ex);
+                    _logger.SendLog(LogEventLevel.Warning, Context.Guild.Id, $"Fatal error setting nickname of user {userToRegister.Id} ({characterName})", exep: ex);
                 }
                 return;
             }
