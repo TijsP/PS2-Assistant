@@ -139,6 +139,38 @@ namespace PS2_Assistant.Modules
             ButtonModule.usersToRegister.Remove(Context.Guild.Id);
         }
 
+        [NeedsDatabaseEntry]
+        [RequireGuildPermission(GuildPermission.ManageGuild)]
+        [SlashCommand("list-unregistered-users", "Displays a list of all users currently not registered")]
+        public async Task ListUnregisteredUsers(
+            [Summary(description: "The role to be assigned to all unregistered users")]
+            IRole? role = null)
+        {
+            if(role is not null && !Context.Guild.CurrentUser.Roles.Any(x => x.Position > role.Position))
+            {
+                await RespondAsync($"Can't assign role {role.Mention} to any users: the role outranks all roles assigned to this bot!", allowedMentions: AllowedMentions.None);
+                _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, "Can't assign role {RoleId} to guild users, as that role outranks any roles possessed by the bot", role.Id);
+                return;
+            }
+
+            string userMentions = "";
+            await Context.Guild.DownloadUsersAsync();   //  Make sure the cached list of users is up to date
+            foreach (SocketGuildUser unregisteredUser in Context.Guild.Users.ExceptBy((await _guildDb.GetGuildByGuildIdAsync(Context.Guild.Id))!.Users.Select(x => x.SocketUserId), x => x.Id))
+            {
+                userMentions += $"<@{unregisteredUser.Id}>,\n";
+                if(role is not null)
+                    await unregisteredUser.AddRoleAsync(role);
+            }
+            userMentions = userMentions.TrimEnd(",\n".ToCharArray());
+
+            var unregisteredUsersEmbed = new EmbedBuilder()
+                .WithColor(247, 82, 37)
+                .WithTitle("Unregistered users:")
+                .WithDescription(userMentions);
+
+            await RespondAsync(embed: unregisteredUsersEmbed.Build(), allowedMentions: AllowedMentions.None);
+        }
+
         /// <summary>
         /// Sends a message asking the user to start the nickname process by pressing a button.
         /// </summary>
