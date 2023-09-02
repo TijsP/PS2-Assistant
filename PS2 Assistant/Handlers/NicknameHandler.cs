@@ -86,8 +86,9 @@ namespace PS2_Assistant.Handlers
                 //  Check whether a user with nickname already exists on the server, to prevent impersonation
                 if (guild.Users.Where(x => x.CharacterName == nickname && x.SocketUserId != targetUser.Id).FirstOrDefault(defaultValue: null) is User impersonatedUser)
                 {
+                    bool followupEphemerally = (await context.Interaction.GetOriginalResponseAsync()).Flags?.HasFlag(MessageFlags.Ephemeral) ?? false;
                     _logger.SendLog(LogEventLevel.Warning, context.Guild.Id, "Possible impersonation: user {UserId} tried to set nickname to {nickname}, but that character already exists in this guild!", targetUser.Id, nickname);
-                    await context.Interaction.FollowupAsync($"User {targetUser.Mention} tried to set his nickname to {nickname}, but user <@{impersonatedUser.SocketUserId}> already exists on the server! Incident reported...");
+                    await context.Interaction.FollowupAsync($"User {targetUser.Mention} tried to set his nickname to {nickname}, but user <@{impersonatedUser.SocketUserId}> already exists on the server! Incident reported...", ephemeral: followupEphemerally);
                     await _assistantUtils.SendLogChannelMessageAsync(context.Guild.Id, $"User {targetUser.Mention} tried to set nickname to \"{nickname}\", but that user already exists on this server (<@{impersonatedUser.SocketUserId}>)");
                     return;
                 }
