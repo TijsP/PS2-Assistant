@@ -82,7 +82,7 @@ namespace PS2_Assistant.Handlers
                 }
 
                 //  Set the Discord nickname of the user, including outfit tag and either the member or non-member role, as defined by the guild admin
-                string? alias = playerData[0].Outfit.Alias;
+                string? alias = playerData[0].Outfit?.Alias ?? "";
                 //  Check whether a user with nickname already exists on the server, to prevent impersonation
                 if (guild.Users.Where(x => x.CharacterName == nickname && x.SocketUserId != targetUser.Id).FirstOrDefault(defaultValue: null) is User impersonatedUser)
                 {
