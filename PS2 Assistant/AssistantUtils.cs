@@ -11,6 +11,7 @@ namespace PS2_Assistant
     public class AssistantUtils
     {
         public const ChannelPermission channelWritePermissions = ChannelPermission.ViewChannel | ChannelPermission.SendMessages;
+        public const string logFilePath = "Logs";
 
         private readonly DiscordSocketClient _client;
         private readonly SourceLogger _logger;
