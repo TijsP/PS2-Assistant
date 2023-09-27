@@ -53,74 +53,84 @@ namespace PS2_Assistant.Handlers
             }
             _logger.SendLog(LogEventLevel.Information, context.Guild.Id, "User {UserId} submitted nickname: {nickname}", targetUser.Id, nickname);
 
-                //  Check whether a database entry exists for this guild, before trying to access it
-                Guild? guild = await findGuild;
-                if (guild is null)
-                {
-                    _logger.SendLog(LogEventLevel.Error, context.Guild.Id, "No guild data found in database for this guild");
-                    await context.Interaction.ModifyOriginalResponseAsync(x => x.Content = "Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
-                    return;
-                }
-
+            //  Check whether a database entry exists for this guild and parse the data returned by Census
+            Guild? guild = await findGuild;
             List<PlayerDataLight>? playerData = await GetPlayerDataLightAsync(nickname, context.Guild.Id, _httpClient, _logger, _configuration);
+
+            if (guild is null)
+            {
+                _logger.SendLog(LogEventLevel.Error, context.Guild.Id, "No guild data found in database for this guild");
+                await context.Interaction.ModifyOriginalResponseAsync(x => x.Content = "Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
+                return;
+            }
             if (playerData is null)
             {
                 await context.Interaction.ModifyOriginalResponseAsync(x => x.Content = $"No exact match found for {nickname}. Please try again.");
                 return;
             }
 
-                //  Set the Discord nickname of the user, including outfit tag and either the member or non-member role, as defined by the guild admin
-                string? alias = playerData[0].Outfit?.Alias;
-                //  Check whether a user with nickname already exists on the server, to prevent impersonation
-                if (guild.Users.Where(x => x.CharacterName == nickname && x.SocketUserId != targetUser.Id).FirstOrDefault(defaultValue: null) is User impersonatedUser)
-                {
-                    _logger.SendLog(LogEventLevel.Warning, context.Guild.Id, "Possible impersonation: user {UserId} tried to set nickname to {nickname}, but that character already exists in this guild!", targetUser.Id, nickname);
-                    await context.Interaction.FollowupAsync($"User {targetUser.Mention} tried to set his nickname to {nickname}, but user <@{impersonatedUser.SocketUserId}> already exists on the server! Incident reported...");
-                    await _assistantUtils.SendLogChannelMessageAsync(context.Guild.Id, $"User {targetUser.Mention} tried to set nickname to \"{nickname}\", but that user already exists on this server (<@{impersonatedUser.SocketUserId}>)");
-                    return;
-                }
-
-                try
-                {
-                    //  Assign Discord nickname and member/non-member role
-                    await targetUser.ModifyAsync(x => x.Nickname = $"[{alias}] {nickname}");
-                    if (guild.OutfitTag is not null && alias?.ToLower() == guild.OutfitTag.ToLower() && guild.Roles?.MemberRole is ulong memberRoleId)
-                    {
-                        if (guild.Roles.NonMemberRole is ulong nonMemberRole && targetUser.RoleIds.Contains(nonMemberRole))
-                            await targetUser.RemoveRoleAsync(nonMemberRole);
-
-                        await targetUser.AddRoleAsync(memberRoleId);
-                        _logger.SendLog(LogEventLevel.Information, context.Guild.Id, "Added role {MemberRoleId} to user {UserId}", memberRoleId, targetUser.Id);
-                    }
-                    else if (guild.OutfitTag is not null && alias?.ToLower() != guild.OutfitTag.ToLower() && guild.Roles?.NonMemberRole is ulong nonMemberRoleId)
-                    {
-                        if (guild.Roles.MemberRole is ulong memberRole && targetUser.RoleIds.Contains(memberRole))
-                            await targetUser.RemoveRoleAsync(memberRole);
-
-                        await targetUser.AddRoleAsync(nonMemberRoleId);
-                        _logger.SendLog(LogEventLevel.Information, context.Guild.Id, "Added role {NonMemberId} to user {UserId}", nonMemberRoleId, targetUser.Id);
-                    }
-
-                    await context.Interaction.ModifyOriginalResponseAsync(x => { x.Content = $"Nickname set to {targetUser.Mention}"; x.AllowedMentions = AllowedMentions.None; });
-                if (context.User.Id == targetUser.Id)
-                        await context.Interaction.FollowupAsync($"We've now set your Discord nickname to your in-game name, to avoid potential confusion during tense moments.\nWith that you're all set, thanks for joining and have fun!", ephemeral: true);
-                }
-                catch (Exception ex)
-                {
-                    _logger.SendLog(LogEventLevel.Warning, context.Guild.Id, "Unable to assign nickname to user {UserId}. Encountered exception:", targetUser.Id, exep: ex);
-                    await context.Interaction.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set <@{targetUser.Id}>'s nickname to \"[{alias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
-                }
-
-                //  Check whether user already exists in the database for this guild
-                if (guild.Users.Where(x => x.SocketUserId == targetUser.Id).FirstOrDefault(defaultValue: null) is User user)
-                {
-                    user.CharacterName = nickname;
-                    user.CurrentOutfit = alias;
-                }
-                else
-                    guild.Users.Add(new User { CharacterName = nickname, CurrentOutfit = alias, SocketUserId = targetUser.Id });
-                await _guildDb.SaveChangesAsync();
+            //  Set the Discord nickname of the user, including outfit tag and either the member or non-member role, as defined by the guild admin
+            string outfitAlias = playerData[0].Outfit?.Alias ?? "";
+            //  Check whether a user with nickname already exists on the server, to prevent impersonation
+            if (guild.Users.Where(x => x.CharacterName == nickname && x.SocketUserId != targetUser.Id).FirstOrDefault(defaultValue: null) is User impersonatedUser)
+            {
+                _logger.SendLog(LogEventLevel.Warning, context.Guild.Id, "Possible impersonation: user {UserId} tried to set nickname to {nickname}, but that character already exists in this guild!", targetUser.Id, nickname);
+                await context.Interaction.FollowupAsync($"User {targetUser.Mention} tried to set his nickname to {nickname}, but user <@{impersonatedUser.SocketUserId}> already exists on the server! Incident reported...");
+                await _assistantUtils.SendLogChannelMessageAsync(context.Guild.Id, $"User {targetUser.Mention} tried to set nickname to \"{nickname}\", but that user already exists on this server (<@{impersonatedUser.SocketUserId}>)");
+                return;
             }
+
+            //  Assign nickname and notify user
+            try
+            {
+                await AssignNicknameAsync(targetUser, outfitAlias, nickname, guild, _logger);
+
+                await context.Interaction.ModifyOriginalResponseAsync(x => { x.Content = $"Nickname set to {targetUser.Mention}"; x.AllowedMentions = AllowedMentions.None; });
+                if (context.User.Id == targetUser.Id)
+                    await context.Interaction.FollowupAsync($"We've now set your Discord nickname to your in-game name, to avoid potential confusion during tense moments.\nWith that you're all set, thanks for joining and have fun!", ephemeral: true);
+            }
+            catch (Exception ex)
+            {
+                _logger.SendLog(LogEventLevel.Warning, context.Guild.Id, "Unable to assign nickname to user {UserId}. Encountered exception:", targetUser.Id, exep: ex);
+                await context.Interaction.ModifyOriginalResponseAsync(x => x.Content = $"Something went wrong when trying to set <@{targetUser.Id}>'s nickname to \"[{outfitAlias}] {nickname}\"...\nPlease contact an admin to have them set the nickname!");
+            }
+
+            //  Check whether user already exists in the database for this guild
+            if (guild.Users.Where(x => x.SocketUserId == targetUser.Id).FirstOrDefault(defaultValue: null) is User user)
+            {
+                user.CharacterName = nickname;
+                user.CurrentOutfit = outfitAlias;
+            }
+            else
+                guild.Users.Add(new User { CharacterName = nickname, CurrentOutfit = outfitAlias, SocketUserId = targetUser.Id });
+            await _guildDb.SaveChangesAsync();
+        }
+
+        public static async Task AssignNicknameAsync(IGuildUser user, string outfitTag, string nickname, Guild guild, SourceLogger logger)
+        {
+            //  Assign Discord nickname and member/non-member role
+            await user.ModifyAsync(x => x.Nickname = $"[{outfitTag}] {nickname}");
+            if (!guild.OutfitTag.IsNullOrEmpty())
+            {
+                //  guild.OutfitTag can't be null here
+                if (outfitTag?.ToLower() == guild.OutfitTag!.ToLower() && guild.Roles?.MemberRole is ulong memberRoleId)
+                {
+                    if (guild.Roles.NonMemberRole is ulong nonMemberRole && user.RoleIds.Contains(nonMemberRole))
+                        await user.RemoveRoleAsync(nonMemberRole);
+
+                    await user.AddRoleAsync(memberRoleId);
+                    logger.SendLog(LogEventLevel.Information, guild.GuildId, "Added role {MemberRoleId} to user {UserId}", memberRoleId, user.Id);
+                }
+                else if (outfitTag?.ToLower() != guild.OutfitTag!.ToLower() && guild.Roles?.NonMemberRole is ulong nonMemberRoleId)
+                {
+                    if (guild.Roles.MemberRole is ulong memberRole && user.RoleIds.Contains(memberRole))
+                        await user.RemoveRoleAsync(memberRole);
+
+                    await user.AddRoleAsync(nonMemberRoleId);
+                    logger.SendLog(LogEventLevel.Information, guild.GuildId, "Added role {NonMemberId} to user {UserId}", nonMemberRoleId, user.Id);
+                }
+            }
+        }
 
         public static async Task<List<PlayerDataLight>?> GetPlayerDataLightAsync(string requestedNickname, ulong guildId, HttpClient censusClient, SourceLogger logger, IConfiguration configuration)
         {
