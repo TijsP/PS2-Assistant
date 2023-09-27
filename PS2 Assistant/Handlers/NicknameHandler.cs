@@ -106,14 +106,23 @@ namespace PS2_Assistant.Handlers
             await _guildDb.SaveChangesAsync();
         }
 
-        public static async Task AssignNicknameAsync(IGuildUser user, string outfitTag, string nickname, Guild guild, SourceLogger logger)
+        /// <summary>
+        /// Assigns a nickname to a guild user, including an outfit tag
+        /// </summary>
+        /// <param name="user">The user who's nickname will be assigned</param>
+        /// <param name="outfitTag">The outfit tag to add to the nickname</param>
+        /// <param name="characterName">The name of the character to which the nickname will be set</param>
+        /// <param name="guild">The database entry for the guild of which <paramref name="user"/> is part of</param>
+        /// <param name="logger">The logger to which to send log messages</param>
+        /// <returns></returns>
+        public static async Task AssignNicknameAsync(IGuildUser user, string outfitTag, string characterName, Guild guild, SourceLogger logger)
         {
             //  Assign Discord nickname and member/non-member role
-            await user.ModifyAsync(x => x.Nickname = $"[{outfitTag}] {nickname}");
+            await user.ModifyAsync(x => x.Nickname = $"[{outfitTag}] {characterName}");
             if (!guild.OutfitTag.IsNullOrEmpty())
             {
                 //  guild.OutfitTag can't be null here
-                if (outfitTag?.ToLower() == guild.OutfitTag!.ToLower() && guild.Roles?.MemberRole is ulong memberRoleId)
+                if (outfitTag.ToLower() == guild.OutfitTag!.ToLower() && guild.Roles?.MemberRole is ulong memberRoleId)
                 {
                     if (guild.Roles.NonMemberRole is ulong nonMemberRole && user.RoleIds.Contains(nonMemberRole))
                         await user.RemoveRoleAsync(nonMemberRole);
@@ -121,7 +130,7 @@ namespace PS2_Assistant.Handlers
                     await user.AddRoleAsync(memberRoleId);
                     logger.SendLog(LogEventLevel.Information, guild.GuildId, "Added role {MemberRoleId} to user {UserId}", memberRoleId, user.Id);
                 }
-                else if (outfitTag?.ToLower() != guild.OutfitTag!.ToLower() && guild.Roles?.NonMemberRole is ulong nonMemberRoleId)
+                else if (outfitTag.ToLower() != guild.OutfitTag!.ToLower() && guild.Roles?.NonMemberRole is ulong nonMemberRoleId)
                 {
                     if (guild.Roles.MemberRole is ulong memberRole && user.RoleIds.Contains(memberRole))
                         await user.RemoveRoleAsync(memberRole);
@@ -132,6 +141,16 @@ namespace PS2_Assistant.Handlers
             }
         }
 
+        /// <summary>
+        /// Returns a list of characters by Census, where the first element contains the character specified by <paramref name="requestedNickname"/>
+        /// </summary>
+        /// <param name="requestedNickname">The character to search for</param>
+        /// <param name="guildId">The Id of the Discord guild this method is run for</param>
+        /// <param name="censusClient">The client connected to Census</param>
+        /// <param name="logger">The logger to which to send log messages</param>
+        /// <param name="configuration">The configuration holding the Census API key</param>
+        /// <param name="requestedResults">The maximum number of results to be returned (minimum of 1)</param>
+        /// <returns>A list of characters with similar names to the one requested by <paramref name="requestedNickname"/>, or null if no exact match was found</returns>
         public static async Task<List<PlayerDataLight>?> GetPlayerDataLightAsync(string requestedNickname, ulong guildId, HttpClient censusClient, SourceLogger logger, IConfiguration configuration, int requestedResults = 6)
         {
             //  Can't query for less than 1 characters
