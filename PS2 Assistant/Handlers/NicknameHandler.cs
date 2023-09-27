@@ -132,10 +132,13 @@ namespace PS2_Assistant.Handlers
             }
         }
 
-        public static async Task<List<PlayerDataLight>?> GetPlayerDataLightAsync(string requestedNickname, ulong guildId, HttpClient censusClient, SourceLogger logger, IConfiguration configuration)
+        public static async Task<List<PlayerDataLight>?> GetPlayerDataLightAsync(string requestedNickname, ulong guildId, HttpClient censusClient, SourceLogger logger, IConfiguration configuration, int requestedResults = 6)
         {
+            //  Can't query for less than 1 characters
+            if (requestedResults < 1) requestedResults = 1;
+
             //  Request players with this name from Census, including a few other, similar names
-            string outfitDataJson = await censusClient.GetStringAsync($"http://census.daybreakgames.com/s:{configuration.GetConnectionString("CensusAPIKey")}/get/ps2:v2/{PlayerDataLight.CollectionQuery}&name.first_lower=*{requestedNickname.ToLower()}");
+            string outfitDataJson = await censusClient.GetStringAsync($"http://census.daybreakgames.com/s:{configuration.GetConnectionString("CensusAPIKey")}/get/ps2:v2/{PlayerDataLight.CollectionQuery}&name.first_lower=*{requestedNickname.ToLower()}&c:limit={requestedResults}");
 
             JsonSerializer serializer = new()
             {
@@ -152,7 +155,7 @@ namespace PS2_Assistant.Handlers
             }
 
             //  If 0 is returned, no similar names were found. If more than 1 are returned and the first result is incorrect, no exact match was found
-            if (returnedData.Returned == 0 || returnedData.Returned > 1 && playerData[0].Name.FirstLower != requestedNickname.ToLower())
+            if (returnedData.Returned == 0 || playerData[0].Name.FirstLower != requestedNickname.ToLower())
             {
                 logger.SendLog(LogEventLevel.Information, guildId, "Unable to find a match for name {nickname} in the Census database. Dumping returned JSON string as a debug log message.", requestedNickname);
                 logger.SendLog(LogEventLevel.Debug, guildId, "Unable to find match for {nickname} using Census API. Returned JSON:\n{json}", requestedNickname, outfitDataJson);
