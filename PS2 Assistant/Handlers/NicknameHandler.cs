@@ -53,25 +53,6 @@ namespace PS2_Assistant.Handlers
             }
             _logger.SendLog(LogEventLevel.Information, context.Guild.Id, "User {UserId} submitted nickname: {nickname}", targetUser.Id, nickname);
 
-            //  Request players with this name from Census, including a few other, similar names
-            string outfitDataJson = await _httpClient.GetStringAsync($"http://census.daybreakgames.com/s:{_configuration.GetConnectionString("CensusAPIKey")}/get/ps2:v2/{PlayerDataLight.CollectionQuery}&name.first_lower=*{nickname.ToLower()}");
-
-            JsonSerializer serializer = new()
-            {
-                ContractResolver = new DefaultContractResolver() { NamingStrategy = new SnakeCaseNamingStrategy() }
-            };
-            var returnedData = JsonConvert.DeserializeObject<CensusObjectWrapper>(outfitDataJson);
-            if (returnedData?.Data?["character_name_list"].ToObject<List<PlayerDataLight>>(serializer) is List<PlayerDataLight> playerData && returnedData.Returned.HasValue)
-            {
-                //  If 0 is returned, no similar names were found. If more than 1 are returned and the first result is incorrect, no exact match was found
-                if (returnedData.Returned == 0 || returnedData.Returned > 1 && playerData[0].Name.FirstLower != nickname.ToLower())
-                {
-                    _logger.SendLog(LogEventLevel.Information, context.Guild.Id, "Unable to find a match for name {nickname} in the Census database. Dumping returned JSON string as a debug log message.", nickname);
-                    _logger.SendLog(LogEventLevel.Debug, context.Guild.Id, "Unable to find match for {nickname} using Census API. Returned JSON:\n{json}", nickname, outfitDataJson);
-                    await context.Interaction.ModifyOriginalResponseAsync(x => x.Content = $"No exact match found for {nickname}. Please try again.");
-                    return;
-                }
-
                 //  Check whether a database entry exists for this guild, before trying to access it
                 Guild? guild = await findGuild;
                 if (guild is null)
@@ -80,6 +61,13 @@ namespace PS2_Assistant.Handlers
                     await context.Interaction.ModifyOriginalResponseAsync(x => x.Content = "Something went horribly wrong... No data found for this server. Please contact the developer of the bot.");
                     return;
                 }
+
+            List<PlayerDataLight>? playerData = await GetPlayerDataLightAsync(nickname, context.Guild.Id, _httpClient, _logger, _configuration);
+            if (playerData is null)
+            {
+                await context.Interaction.ModifyOriginalResponseAsync(x => x.Content = $"No exact match found for {nickname}. Please try again.");
+                return;
+            }
 
                 //  Set the Discord nickname of the user, including outfit tag and either the member or non-member role, as defined by the guild admin
                 string? alias = playerData[0].Outfit?.Alias;
@@ -114,7 +102,7 @@ namespace PS2_Assistant.Handlers
                     }
 
                     await context.Interaction.ModifyOriginalResponseAsync(x => { x.Content = $"Nickname set to {targetUser.Mention}"; x.AllowedMentions = AllowedMentions.None; });
-                    if(context.User.Id == targetUser.Id)
+                if (context.User.Id == targetUser.Id)
                         await context.Interaction.FollowupAsync($"We've now set your Discord nickname to your in-game name, to avoid potential confusion during tense moments.\nWith that you're all set, thanks for joining and have fun!", ephemeral: true);
                 }
                 catch (Exception ex)
@@ -133,12 +121,35 @@ namespace PS2_Assistant.Handlers
                     guild.Users.Add(new User { CharacterName = nickname, CurrentOutfit = alias, SocketUserId = targetUser.Id });
                 await _guildDb.SaveChangesAsync();
             }
-            else
+
+        public static async Task<List<PlayerDataLight>?> GetPlayerDataLightAsync(string requestedNickname, ulong guildId, HttpClient censusClient, SourceLogger logger, IConfiguration configuration)
+        {
+            //  Request players with this name from Census, including a few other, similar names
+            string outfitDataJson = await censusClient.GetStringAsync($"http://census.daybreakgames.com/s:{configuration.GetConnectionString("CensusAPIKey")}/get/ps2:v2/{PlayerDataLight.CollectionQuery}&name.first_lower=*{requestedNickname.ToLower()}");
+
+            JsonSerializer serializer = new()
             {
-                _logger.SendLog(LogEventLevel.Warning, context.Guild.Id, "Census failed to return a list of names. Dumping returned JSON as a debug log message");
-                _logger.SendLog(LogEventLevel.Debug, context.Guild.Id, "Returned Census JSON: {json}", outfitDataJson);
-                await context.Interaction.ModifyOriginalResponseAsync(x => x.Content = $"Whoops, something went wrong... Unable to find that user due to an error in the Census database.");
+                ContractResolver = new DefaultContractResolver() { NamingStrategy = new SnakeCaseNamingStrategy() }
+            };
+            var returnedData = JsonConvert.DeserializeObject<CensusObjectWrapper>(outfitDataJson);
+
+            //  Check whether Census returned valid data
+            if (returnedData?.Data?["character_name_list"].ToObject<List<PlayerDataLight>>(serializer) is not List<PlayerDataLight> playerData || !returnedData.Returned.HasValue)
+            {
+                logger.SendLog(LogEventLevel.Warning, guildId, "Census failed to return a list of names. Dumping returned JSON as a debug log message");
+                logger.SendLog(LogEventLevel.Debug, guildId, "Returned Census JSON: {json}", outfitDataJson);
+                return null;
             }
+
+            //  If 0 is returned, no similar names were found. If more than 1 are returned and the first result is incorrect, no exact match was found
+            if (returnedData.Returned == 0 || returnedData.Returned > 1 && playerData[0].Name.FirstLower != requestedNickname.ToLower())
+            {
+                logger.SendLog(LogEventLevel.Information, guildId, "Unable to find a match for name {nickname} in the Census database. Dumping returned JSON string as a debug log message.", requestedNickname);
+                logger.SendLog(LogEventLevel.Debug, guildId, "Unable to find match for {nickname} using Census API. Returned JSON:\n{json}", requestedNickname, outfitDataJson);
+                return null;
+            }
+
+            return playerData;
         }
     }
 }
