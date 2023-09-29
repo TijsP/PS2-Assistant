@@ -4,7 +4,7 @@
     public record OutfitMembersLight(
         ulong CharacterId,
         string AliasLower,
-        PlayerDataLight PlayerName
+        PlayerDataLight? PlayerName     //  player_name can be null when the character has been deleted
         ) : ICensusObject
     {
         /// <summary>
