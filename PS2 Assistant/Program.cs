@@ -65,6 +65,7 @@ public class Program
             .AddSingleton<CLIHandler>()
             .AddSingleton<InteractionHandler>()
             .AddSingleton<NicknameHandler>()
+            .AddSingleton<OutfitTagHandler>()
             .AddSingleton<AssistantUtils>()
             .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>(), new InteractionServiceConfig { LogLevel = LogSeverity.Verbose }))
             .BuildServiceProvider();
