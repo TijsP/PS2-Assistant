@@ -156,7 +156,7 @@ namespace PS2_Assistant.Modules.SlashCommands
         [NeedsDatabaseEntry]
         [EnabledInDm(false)]
         [DefaultMemberPermissions(GuildPermission.ManageGuild)]
-        [SlashCommand("update-outfit-tags", "Manually start the process of updating the outfit tags of all registered users")]
+        [SlashCommand("update-outfit-tags", "Manually trigger the process of updating the outfit tags of all registered users. This might take a while")]
         public async Task UpdateOutfitTags()
         {
             await RespondAsync("Updating all outfit tags");
