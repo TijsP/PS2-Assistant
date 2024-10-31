@@ -77,7 +77,7 @@ namespace PS2_Assistant.Handlers
                         _logger.SendLog(LogEventLevel.Debug, guildId, "Returned Census JSON: {json}", outfitDataJson);
                         break;  //  Break out of do-while, continue with next outfit
                     }
-                    resultsReturned = returnedData.Returned.Value;
+                    resultsReturned += returnedData.Returned.Value;
                     _logger.SendLog(LogEventLevel.Debug, guildId, "Number of results returned for outfit {OutfitTag}: {ResultCount}", outfitTag, resultsReturned);
 
                     //  Remove all characters that are still in their original outfit as returned by Census
