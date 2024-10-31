@@ -58,8 +58,17 @@ namespace PS2_Assistant.Modules.SlashCommands
                     else
                     {
                         _logger.SendLog(Serilog.Events.LogEventLevel.Debug, Context.Guild.Id, "Sending log file {LogFileName}", file.Name);
-                        Stream fileStream = new StreamReader(file.FullName).BaseStream;
-                        requestedLogFiles.Add(new(fileStream, file.Name));
+
+                        try
+                        {
+                            FileStream fileStream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                            Stream streamReader = new StreamReader(fileStream, encoding: System.Text.Encoding.Default).BaseStream;
+                            requestedLogFiles.Add(new(streamReader, file.Name));
+                        }
+                        catch (Exception ex)
+                        {
+                            await FollowupAsync($"Failed with the following execption: `{ex.Message}`\nWith stacktrace: ```{ex.StackTrace}```");
+                        }
                     }
                 }
 
