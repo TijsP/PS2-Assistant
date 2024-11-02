@@ -1,12 +1,13 @@
 ﻿using Discord;
 using Discord.Interactions;
-
+using PS2_Assistant.Attributes;
 using PS2_Assistant.Logger;
 
 namespace PS2_Assistant.Modules.SlashCommands
 {
     public partial class Slashcommands
     {
+        [BotOwnerCommand]
         [DontAutoRegister]
         [EnabledInDm(false)]
         [Group("diagnostics", "returns various types of diagnostic data")]
