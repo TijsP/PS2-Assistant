@@ -167,8 +167,11 @@ namespace PS2_Assistant.Handlers
                         //  If character joined guild outfit, send "welcome to outfit" message (in welcome channel)
                         if (newOutfitLower == guild.OutfitTag!.ToLower() && guild.Channels.WelcomeChannel is not null)
                         {
-                            if (await _client.GetChannelAsync(guild.Channels.WelcomeChannel.Value) is ITextChannel welcomeChannel)
-                                await _assistantUtils.SendMessageInChannelAsync(welcomeChannel, $"Welcome, <@{targetUser.SocketUserId}>, to {guild.OutfitTag}!");
+                            await _assistantUtils.SendLogChannelMessageAsync(guild.GuildId, $"User <@{targetUser.SocketUserId}> has joined the outfit");
+                            
+                            //  TODO:   Only send "welcome to outfit" message to user if this is wanted by the admins
+                            //if (await _client.GetChannelAsync(guild.Channels.WelcomeChannel.Value) is ITextChannel welcomeChannel)
+                            //    await _assistantUtils.SendMessageInChannelAsync(welcomeChannel, $"Welcome, <@{targetUser.SocketUserId}>, to {guild.OutfitTag}!");
                         }
                         //  If character left guild outfit, send "character left outfit" message to admins (in log channel)
                         else if (targetUser.CurrentOutfit?.ToLower() == guild.OutfitTag!.ToLower() && newOutfitLower != guild.OutfitTag!.ToLower())
