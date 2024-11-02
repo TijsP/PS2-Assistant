@@ -45,7 +45,7 @@ public class Program
         ILogger sLogger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .Enrich.FromLogContext()
-            .WriteTo.File(new JsonFormatter(), "Logs/log.json", rollingInterval: RollingInterval.Day)
+            .WriteTo.File(new JsonFormatter(), $"{AssistantUtils.logFilePath}/log.json", rollingInterval: RollingInterval.Day)
             .WriteTo.Seq(_appSettings.GetConnectionString("LoggerURL")!, apiKey: _appSettings.GetConnectionString("LoggerAPIKey"))
             .WriteTo.Console(expression)
             .CreateLogger();
