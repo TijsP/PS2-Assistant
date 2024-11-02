@@ -51,7 +51,7 @@ public class Program
         Serilog.ILogger sLogger = new LoggerConfiguration()
             .MinimumLevel.Debug()
             .Enrich.FromLogContext()
-            .WriteTo.File(new JsonFormatter(), $"{AssistantUtils.logFilePath}/log.json", rollingInterval: RollingInterval.Day)
+            .WriteTo.File(new JsonFormatter(), $"{AssistantUtils.logFilePath}/log.json", rollingInterval: RollingInterval.Day, retainedFileCountLimit: 90)
             .WriteTo.Seq(builder.Configuration.GetConnectionString("LoggerURL")!, apiKey: builder.Configuration.GetConnectionString("LoggerAPIKey"))
             .WriteTo.Console(expression)
             .CreateLogger();

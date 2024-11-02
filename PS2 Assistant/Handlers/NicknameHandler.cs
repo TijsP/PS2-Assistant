@@ -79,7 +79,7 @@ namespace PS2_Assistant.Handlers
                 await _assistantUtils.SendLogChannelMessageAsync(context.Guild.Id, $"User {targetUser.Mention} tried to set nickname to \"{nickname}\", but that user already exists on this server (<@{impersonatedUser.SocketUserId}>)");
                 return;
             }
-
+          
             //  Assign nickname and notify user
             try
             {

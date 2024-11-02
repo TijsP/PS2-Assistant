@@ -29,7 +29,7 @@ namespace PS2_Assistant.Modules
         [ModalInteraction("nickname-modal")]
         public async Task NicknameModalInteraction(NicknameModal modal)
         {
-            await RespondAsync("Validating character name...", allowedMentions: AllowedMentions.None);
+            await RespondAsync("Validating character name...", allowedMentions: AllowedMentions.None, ephemeral: true);
             await _nicknameHandler.VerifyNicknameAsync(Context, modal.Nickname, (IGuildUser)Context.User);
         }
     }
