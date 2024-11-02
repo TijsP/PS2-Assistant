@@ -157,6 +157,8 @@ namespace PS2_Assistant.Modules
             await Context.Guild.DownloadUsersAsync();   //  Make sure the cached list of users is up to date
             foreach (SocketGuildUser unregisteredUser in Context.Guild.Users.ExceptBy((await _guildDb.GetGuildByGuildIdAsync(Context.Guild.Id))!.Users.Select(x => x.SocketUserId), x => x.Id))
             {
+                if (unregisteredUser.IsBot)
+                    continue;
                 userMentions += $"<@{unregisteredUser.Id}>,\n";
                 if(role is not null)
                     await unregisteredUser.AddRoleAsync(role);

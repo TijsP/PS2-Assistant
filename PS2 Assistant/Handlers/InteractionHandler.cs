@@ -7,6 +7,7 @@ using Discord;
 using Discord.Interactions;
 using Discord.WebSocket;
 
+using PS2_Assistant.Attributes;
 using PS2_Assistant.Logger;
 
 namespace PS2_Assistant.Handlers
@@ -86,6 +87,13 @@ namespace PS2_Assistant.Handlers
             await _interactionService.AddModulesToGuildAsync(Convert.ToUInt64(_configuration.GetConnectionString("TestGuildId")), modules: _interactionService.Modules.Where(x => x.DontAutoRegister == true).ToArray());
 #else
             await _interactionService.RegisterCommandsGloballyAsync(true);
+            //  Allow (sub)modules marked with the BotOwnerCommand to be accessed from the test server
+            await _interactionService.AddModulesToGuildAsync(Convert.ToUInt64(_configuration.GetConnectionString("TestGuildId")),
+                modules: _interactionService.Modules
+                .Where(x =>
+                    x.Attributes.Any(attr =>
+                        attr.GetType() == typeof(BotOwnerCommandAttribute)))
+                .ToArray());
 #endif
             _logger.SendLog(LogEventLevel.Information, null, "Bot ready");
         }

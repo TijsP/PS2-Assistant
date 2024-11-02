@@ -58,13 +58,15 @@ namespace PS2_Assistant.Modules
 
             int indexOfNextUser = Context.Guild.Users.ToList().FindIndex(x => x.Id == userToRegisterId) + 1;
 
-            //  Skip over users that have already been registered to this guild
-            while (indexOfNextUser <= Context.Guild.Users.Count - 1 && (await _guildDb.GetGuildByGuildIdAsync(Context.Guild.Id))!.Users.Any(x => x.SocketUserId == Context.Guild.Users.ElementAt(indexOfNextUser).Id))
+            //  Skip over users that have already been registered to this guild and over other bots
+            while (indexOfNextUser <= Context.Guild.Users.Count - 1 &&
+                    ((await _guildDb.GetGuildByGuildIdAsync(Context.Guild.Id))!.Users.Any(x => x.SocketUserId == Context.Guild.Users.ElementAt(indexOfNextUser).Id)
+                    || Context.Guild.Users.ElementAt(indexOfNextUser).IsBot))
                 indexOfNextUser++;
 
             if (indexOfNextUser > Context.Guild.Users.Count - 1)
             {
-                _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, $"Added {usersToRegister[Context.Guild.Id].Count} to the list of users to be registered");
+                _logger.SendLog(LogEventLevel.Information, Context.Guild.Id, $"Added {usersToRegister[Context.Guild.Id].Count} users to the list of users to be registered");
                 await FollowupAsync("All members have been presented! Please run `/register-selected-users` to complete the process");
                 return;
             }

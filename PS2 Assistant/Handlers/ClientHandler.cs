@@ -16,13 +16,15 @@ namespace PS2_Assistant.Handlers
         private readonly BotContext _guildDb;
         private readonly AssistantUtils _utils;
         private readonly SourceLogger _logger;
+        private readonly OutfitTagHandler _outfitTagHandler;
 
-        public ClientHandler(DiscordSocketClient client, BotContext guildDb, AssistantUtils utils, SourceLogger logger)
+        public ClientHandler(DiscordSocketClient client, BotContext guildDb, AssistantUtils utils, SourceLogger logger, OutfitTagHandler outfitTagHandler)
         {
             _client = client;
             _guildDb = guildDb;
             _utils = utils;
             _logger = logger;
+            _outfitTagHandler = outfitTagHandler;
         }
 
         public Task InitializeAsync()
@@ -60,13 +62,27 @@ namespace PS2_Assistant.Handlers
                     await RemoveGuildAsync(guildId);
                 }
             }
+
+            //  Make sure the outfit tags of all players are updated periodically
+            _outfitTagHandler.ScheduleOutfitTagUpdateForAllGuilds();
         }
 
         public async Task UserJoinedHandler(SocketGuildUser user)
         {
-            await _utils.SendLogChannelMessageAsync(user.Guild.Id, $"User {user.Mention} joined the server");
+            if (user.IsBot)
+            {
+                await _utils.SendLogChannelMessageAsync(user.Guild.Id, $"Bot {user.Mention} joined the server");
+                _logger.SendLog(LogEventLevel.Information, user.Guild.Id, "Bot {BotId} joined the guild", user.Id);
+                return;
+            }
 
-            if (await _guildDb.GetGuildByGuildIdAsync(user.Guild.Id) is Guild guild && guild.Channels.WelcomeChannel is ulong welcomeChannelId && _client.GetChannel(welcomeChannelId) is ITextChannel welcomeChannel)
+            await _utils.SendLogChannelMessageAsync(user.Guild.Id, $"User {user.Mention} joined the server");
+            _logger.SendLog(LogEventLevel.Information, user.Guild.Id, "User {UserId} joined the guild", user.Id);
+
+            if (await _guildDb.GetGuildByGuildIdAsync(user.Guild.Id) is not Guild guild)
+                return;
+
+            if (guild.Channels.WelcomeChannel is ulong welcomeChannelId && _client.GetChannel(welcomeChannelId) is ITextChannel welcomeChannel)
             {
                 //  Both SendMessageInChannelAsync and SendPollToChannelAsync already check for bot write permissions, so this check can be omitted here
                 if (guild.SendWelcomeMessage)
@@ -76,11 +92,13 @@ namespace PS2_Assistant.Handlers
             }
             else
             {
-                await _utils.SendLogChannelMessageAsync(user.Guild.Id, "Can't send welcome message: no welcome channel set!");
+                if (guild.SendWelcomeMessage)
+                    await _utils.SendLogChannelMessageAsync(user.Guild.Id, "Can't send welcome message: no welcome channel set!");
+                if (guild.AskNicknameUponWelcome)
+                    await _utils.SendLogChannelMessageAsync(user.Guild.Id, "Can't send nickname poll: no welcome channel set!");
+
                 _logger.SendLog(LogEventLevel.Warning, user.Guild.Id, "No welcome channel set");
             }
-
-            _logger.SendLog(LogEventLevel.Information, user.Guild.Id, "User {UserId} joined the guild", user.Id);
         }
 
         public async Task UserLeftHandler(SocketGuild guild, SocketUser user)
@@ -107,8 +125,11 @@ namespace PS2_Assistant.Handlers
                 await _guildDb.Guilds.AddAsync(new Guild { GuildId = guildId, Channels = new Channels(), Roles = new Roles() });
                 await _guildDb.SaveChangesAsync();
             }
-        }
 
+            //  Ensure this new guild will also have the outfit tags of its members updated
+            _outfitTagHandler.ScheduleOutfitTagUpdate(guildId);
+        }
+        
         public async Task LeftGuildHandler(SocketGuild guild)
         {
             await RemoveGuildAsync(guild.Id);
@@ -117,6 +138,10 @@ namespace PS2_Assistant.Handlers
         }
         public async Task RemoveGuildAsync(ulong guildId)
         {
+            //  A single invocable can't be unscheduled, so all have to be unscheduled after which the remaining guilds can have their update rescheduled
+            _outfitTagHandler.UnscheduleOutfitTagUpdateForAllGuilds();
+            _outfitTagHandler.ScheduleOutfitTagUpdateForAllGuilds();
+
             if (_guildDb.Guilds.Find(guildId) is Guild guildToLeave)
             {
                 _guildDb.Guilds.Remove(guildToLeave);
