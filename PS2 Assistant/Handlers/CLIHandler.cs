@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 
 using Discord.WebSocket;
@@ -9,22 +10,30 @@ using PS2_Assistant.Models.Database;
 
 namespace PS2_Assistant.Handlers
 {
-    public class CLIHandler
+    public class CLIHandler : BackgroundService
     {
+        private readonly IHostApplicationLifetime _hostLifetime;
         private readonly DiscordSocketClient _client;
         private readonly BotContext _guildDb;
 
-        public CLIHandler(DiscordSocketClient client, BotContext guildDb)
+        public CLIHandler(IHostApplicationLifetime hostLifetime, DiscordSocketClient client, BotContext guildDb)
         {
+            _hostLifetime = hostLifetime;
             _client = client;
             _guildDb = guildDb;
         }
 
-        public async Task CommandHandlerAsync(CancellationTokenSource source)
+        public async Task CommandHandlerAsync()
         {
-            do
-            {
-                if (Console.ReadLine() is string fullCommand)
+            while (!_hostLifetime.ApplicationStopping.IsCancellationRequested) {
+
+                //  To prevent blocking by Console.Readline, only actually read the line if input is available
+                if (!Console.KeyAvailable)
+                {
+                    await Task.Delay(100);
+                    continue;
+                }
+                else if (Console.ReadLine() is string fullCommand)
                 {
                     if (fullCommand.StartsWith("help"))
                         await Console.Out.WriteLineAsync("\nList of commands:\n" +
@@ -33,7 +42,7 @@ namespace PS2_Assistant.Handlers
                                                             "info:      returns information about the bot status\n" +
                                                             "db-info:   returns information about the database (use \"db-info help\" for more information)");
                     else if (fullCommand.StartsWith("stop"))
-                        source.Cancel();
+                        _hostLifetime.StopApplication();
                     else if (fullCommand.StartsWith("info"))
                         await Console.Out.WriteLineAsync(await CLIInfo());
                     else if (fullCommand.StartsWith("db-info"))
@@ -79,7 +88,8 @@ namespace PS2_Assistant.Handlers
                     else
                         await Console.Out.WriteLineAsync($"command not recognized: {fullCommand}. Use \"help\" for a list of commands");
                 }
-            }while (!source.Token.IsCancellationRequested);
+
+            }
         }
 
         private async Task<string> CLIInfo()
@@ -180,6 +190,11 @@ namespace PS2_Assistant.Handlers
             if (!content.IsNullOrEmpty() && content!.Length > width)
                 width = content.Length;
             return $"{content}{new string(' ', content.IsNullOrEmpty() ? width.Value : width.Value - content!.Length)} |";
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            await CommandHandlerAsync();
         }
     }
 }

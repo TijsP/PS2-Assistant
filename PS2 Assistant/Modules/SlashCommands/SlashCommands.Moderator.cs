@@ -152,5 +152,16 @@ namespace PS2_Assistant.Modules.SlashCommands
             (await guild)!.OutfitTag = outfitTag;
             _guildDb.SaveChanges();
         }
+
+        [NeedsDatabaseEntry]
+        [EnabledInDm(false)]
+        [DefaultMemberPermissions(GuildPermission.ManageGuild)]
+        [SlashCommand("update-outfit-tags", "Manually trigger updating of the outfit tags of all registered users. This might take a while")]
+        public async Task UpdateOutfitTags()
+        {
+            await RespondAsync("Updating all outfit tags");
+            await _tagHandler.UpdateOutfitTagsAsync(Context.Guild.Id);
+            await FollowupAsync("Done");
+        }
     }
 }
