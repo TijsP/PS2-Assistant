@@ -1,6 +1,9 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
+using Coravel.Scheduling.Schedule;
+using Coravel.Scheduling.Schedule.Interfaces;
+
 using Discord;
 using Discord.WebSocket;
 
@@ -10,6 +13,7 @@ using Newtonsoft.Json.Serialization;
 using Serilog.Events;
 
 using PS2_Assistant.Data;
+using PS2_Assistant.Invocables;
 using PS2_Assistant.Logger;
 using PS2_Assistant.Models.Census.API;
 using PS2_Assistant.Models.Database;
@@ -23,16 +27,66 @@ namespace PS2_Assistant.Handlers
         private readonly HttpClient _httpClient;
         private readonly AssistantUtils _assistantUtils;
         private readonly DiscordSocketClient _client;
+        private readonly IScheduler _scheduler;
         private readonly IConfiguration _configuration;
 
-        public OutfitTagHandler(BotContext guildDb, SourceLogger logger, HttpClient httpClient, AssistantUtils assistantUtils, DiscordSocketClient client, IConfiguration configuration)
+        public static readonly string OutfitTagUpdateInvocableId = "CensusRequest";     //  Groups outfit tag updates together to prevent overlapping and thus simultaneous census requests
+        private int _outfitTagUpdatesScheduledCount = 0;    //  Keep track of the amount of outfit tag update invocables scheduled
+
+        public OutfitTagHandler(BotContext guildDb, SourceLogger logger, HttpClient httpClient, AssistantUtils assistantUtils, DiscordSocketClient client, IScheduler scheduler, IConfiguration configuration)
         {
             _guildDb = guildDb;
             _logger = logger;
             _httpClient = httpClient;
             _assistantUtils = assistantUtils;
             _client = client;
+            _scheduler = scheduler;
             _configuration = configuration;
+        }
+
+        public void ScheduleOutfitTagUpdate(ulong guildId)
+        {
+            int updateAtMinute = Random.Shared.Next(0, 15);
+            _logger.SendLog(LogEventLevel.Information, guildId, "Scheduled outfit tag update invocable for this guild at every {Minutes} minutes past every second hour", updateAtMinute);
+            _scheduler.ScheduleWithParams<OutfitTagUpdateInvocable>(guildId)
+                //.Cron($"*/1 * * * *");  //  (CRON doesn't seem to be working with ScheduleWithParams, please disregard) Every two hours, at a random minute (0 to 15 inclusive) after the hour
+                .HourlyAt(updateAtMinute)   //  Execute every hour at updateAtMinute minutes (0-15, inclusive) after the hour
+                .PreventOverlapping(OutfitTagUpdateInvocableId);
+
+            _outfitTagUpdatesScheduledCount++;
+        }
+
+        public void ScheduleOutfitTagUpdateForAllGuilds()
+        {
+            foreach(SocketGuild guild in _client.Guilds)
+            {
+                ScheduleOutfitTagUpdate(guild.Id);
+            }
+        }
+        public void UnscheduleOutfitTagUpdateForAllGuilds()
+        {
+            if (_scheduler is not Scheduler schedulerClass)
+                return;
+
+            int totalScheduleCount = _outfitTagUpdatesScheduledCount;
+            int unscheduleFailedCount = 0;
+
+            while(_outfitTagUpdatesScheduledCount > 0)
+            {
+                //  When unscheduling fails, we try to continue. However, most likely we keep running into the same problematic schedule over and over again.
+                //  As long as the library doesn't come with a better way to do this, nothing can be done about this other than restarting the bot once errors
+                //  start appearing
+                if (!schedulerClass.TryUnschedule(OutfitTagUpdateInvocableId))
+                    unscheduleFailedCount++;
+                _outfitTagUpdatesScheduledCount--;
+            }
+
+            if (unscheduleFailedCount == 0)
+                _logger.SendLog(LogEventLevel.Information, null, "Successfully unscheduled all {ScheduleCount} outfit tag update invocables", totalScheduleCount);
+            else if (unscheduleFailedCount == totalScheduleCount)
+                _logger.SendLog(LogEventLevel.Error, null, "Failed to unschedule any of the {ScheduleCount} outfit tag update invocables", unscheduleFailedCount);
+            else
+                _logger.SendLog(LogEventLevel.Error, null, "Partial failure: failed to unschedule {UnscheduleFailedCount} out of {ScheduleCount} outfit tag update invocables", unscheduleFailedCount, totalScheduleCount);
         }
 
         public async Task UpdateOutfitTagsAsync(ulong guildId)

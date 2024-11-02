@@ -74,9 +74,6 @@ public class Program
             .AddSingleton<AssistantUtils>()
             .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>(), new InteractionServiceConfig { LogLevel = LogSeverity.Verbose }))
             .AddScheduler()
-            .AddTransient<TestInvocable>()
-            .AddTransient<OutfitTagUpdateInvocable>()
-            .AddTransient<TestInvocable>()
             .BuildServiceProvider();
 
         //  Build the generic host
