@@ -187,7 +187,7 @@ namespace PS2_Assistant.Handlers
                     if ((await _client.GetGuild(guildId).GetUsersAsync().FlattenAsync()).First(x => x.Id == targetUser.SocketUserId) is not IGuildUser targetGuildUser)
                         continue;
 
-                    await NicknameHandler.AssignNicknameAsync(targetGuildUser, playerData.Outfit?.Alias ?? "", characterName, guild, _logger);
+                    await NicknameHandler.AssignNicknameAndRoleAsync(targetGuildUser, playerData.Outfit?.Alias ?? "", characterName, guild, _logger);
                     await _guildDb.SaveChangesAsync();
                 }
                 else
