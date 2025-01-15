@@ -116,10 +116,11 @@ namespace PS2_Assistant.Handlers
             foreach (string outfitTag in outfitsToQuery) {
 
                 List<User> charactersToCheck = registeredOutfits[outfitTag];
-                int resultsReturned = 0;
+                int resultsInLastQuery = 0;
+                int totalResultsCount = 0;
                 do {
                     //  Query Census
-                    string censusQuery = $"http://census.daybreakgames.com/s:{_configuration.GetConnectionString("CensusAPIKey")}/get/ps2:v2/{OutfitMembersLight.CollectionQuery}&alias_lower=*{outfitTag.ToLower()}&c:start={resultsReturned}";
+                    string censusQuery = $"http://census.daybreakgames.com/s:{_configuration.GetConnectionString("CensusAPIKey")}/get/ps2:v2/{OutfitMembersLight.CollectionQuery}&alias_lower=*{outfitTag.ToLower()}&c:start={totalResultsCount}";
                     string outfitDataJson = await _httpClient.GetStringAsync(censusQuery);
 
                     //  Validate returned data
@@ -131,14 +132,15 @@ namespace PS2_Assistant.Handlers
                         _logger.SendLog(LogEventLevel.Debug, guildId, "Returned Census JSON: {json}", outfitDataJson);
                         break;  //  Break out of do-while, continue with next outfit
                     }
-                    resultsReturned += returnedData.Returned.Value;
-                    _logger.SendLog(LogEventLevel.Debug, guildId, "Number of results returned for outfit {OutfitTag}: {ResultCount}", outfitTag, resultsReturned);
+                    resultsInLastQuery = returnedData.Returned.Value;
+                    totalResultsCount += resultsInLastQuery;
+                    _logger.SendLog(LogEventLevel.Debug, guildId, "Number of results returned for outfit {OutfitTag}: {ResultCount}", outfitTag, totalResultsCount);
 
                     //  Remove all characters that are still in their original outfit as returned by Census
                     charactersToCheck.RemoveAll(c => playerData.Where(y => y.PlayerName?.Name.FirstLower is not null).Select(y => y.PlayerName!.Name.FirstLower?.ToLower()).Contains(c.CharacterName!.ToLower()));
 
                     //  If there's still characters left to check and Census returned 5000 characters, query the next 5000 characters (5000 being the maximum number of results returned by outfit_member_extended)
-                } while (charactersToCheck.Count != 0 && resultsReturned >= 5000);
+                } while (charactersToCheck.Count != 0 && resultsInLastQuery >= 5000);
 
                 //  All remaining characters are not in their associated outfit anymore, and need to be checked individually
                 _logger.SendLog(LogEventLevel.Debug, guildId, "Number of characters that have not been found in Census for outfit {OutfitTag}: {UnaccountedCharacterCount}", outfitTag, charactersToCheck.Count);
@@ -185,7 +187,7 @@ namespace PS2_Assistant.Handlers
                     if ((await _client.GetGuild(guildId).GetUsersAsync().FlattenAsync()).First(x => x.Id == targetUser.SocketUserId) is not IGuildUser targetGuildUser)
                         continue;
 
-                    await NicknameHandler.AssignNicknameAsync(targetGuildUser, playerData.Outfit?.Alias ?? "", characterName, guild, _logger);
+                    await NicknameHandler.AssignNicknameAndRoleAsync(targetGuildUser, playerData.Outfit?.Alias ?? "", characterName, guild, _logger);
                     await _guildDb.SaveChangesAsync();
                 }
                 else

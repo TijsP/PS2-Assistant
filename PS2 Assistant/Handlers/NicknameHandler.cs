@@ -83,11 +83,16 @@ namespace PS2_Assistant.Handlers
             //  Assign nickname and notify user
             try
             {
-                await AssignNicknameAsync(targetUser, outfitAlias, nickname, guild, _logger);
+                NicknameRoleUpdateState nicknameState = await AssignNicknameAndRoleAsync(targetUser, outfitAlias, nickname, guild, _logger);
 
                 await context.Interaction.ModifyOriginalResponseAsync(x => { x.Content = $"Nickname set to {targetUser.Mention}"; x.AllowedMentions = AllowedMentions.None; });
                 if (context.User.Id == targetUser.Id)
-                    await context.Interaction.FollowupAsync($"We've now set your Discord nickname to your in-game name, to avoid potential confusion during tense moments.\nWith that you're all set, thanks for joining and have fun!", ephemeral: true);
+                {
+                    if (nicknameState == NicknameRoleUpdateState.NicknameLengthWarning)
+                        await context.Interaction.FollowupAsync($"We've now set your Discord nickname in this server to your in-game character name, to avoid potential confusion during tense moments. It was a bit too long though, so we've had to shorten it. If you're unhappy with the result, please change it yourself in accordance with this server's rules or ask a moderator to do so for you.\nWith that you're all set, thanks for joining and have fun!", ephemeral: true);
+                    else if (nicknameState == NicknameRoleUpdateState.Succesful)
+                        await context.Interaction.FollowupAsync($"We've now set your Discord nickname in this server to your in-game character name, to avoid potential confusion during tense moments.\nWith that you're all set, thanks for joining and have fun!", ephemeral: true);
+                }
             }
             catch (Exception ex)
             {
@@ -106,8 +111,9 @@ namespace PS2_Assistant.Handlers
             await _guildDb.SaveChangesAsync();
         }
 
+        public enum NicknameRoleUpdateState { Succesful, NicknameLengthWarning };
         /// <summary>
-        /// Assigns a nickname to a guild user, including an outfit tag
+        /// Assigns a nickname to a guild user, including an outfit tag. Also adds the right role to the user, if applicable
         /// </summary>
         /// <param name="user">The user who's nickname will be assigned</param>
         /// <param name="outfitTag">The outfit tag to add to the nickname</param>
@@ -115,10 +121,20 @@ namespace PS2_Assistant.Handlers
         /// <param name="guild">The database entry for the guild of which <paramref name="user"/> is part of</param>
         /// <param name="logger">The logger to which to send log messages</param>
         /// <returns></returns>
-        public static async Task AssignNicknameAsync(IGuildUser user, string outfitTag, string characterName, Guild guild, SourceLogger logger)
+        public static async Task<NicknameRoleUpdateState> AssignNicknameAndRoleAsync(IGuildUser user, string outfitTag, string characterName, Guild guild, SourceLogger logger)
         {
+            NicknameRoleUpdateState? state = null;
+
+            string nickname = $"[{outfitTag}] {characterName}";
+            if (nickname.Length > 32)   //  32 being the Discord nickname size limit
+            {
+                state = NicknameRoleUpdateState.NicknameLengthWarning;
+                nickname = nickname.Remove(30);         //  Remove all characters exceeding the size limit, plus one
+                nickname += '…';                        //  Append '…' to indicate the character name was cutoff
+            }
+
             //  Assign Discord nickname and member/non-member role
-            await user.ModifyAsync(x => x.Nickname = $"[{outfitTag}] {characterName}");
+            await user.ModifyAsync(x => x.Nickname = nickname);
             if (!guild.OutfitTag.IsNullOrEmpty())
             {
                 //  guild.OutfitTag can't be null here
@@ -139,6 +155,10 @@ namespace PS2_Assistant.Handlers
                     logger.SendLog(LogEventLevel.Information, guild.GuildId, "Added role {NonMemberId} to user {UserId}", nonMemberRoleId, user.Id);
                 }
             }
+
+            //  Assume success if state wasn't updated
+            state ??= NicknameRoleUpdateState.Succesful;
+            return state.Value;
         }
 
         /// <summary>
