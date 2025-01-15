@@ -65,9 +65,9 @@ namespace PS2_Assistant.Handlers
                         break;
                     default:
                         if (context.Interaction.HasResponded)
-                            await context.Interaction.FollowupAsync($"An error occurred while executing: {result.ErrorReason}");
+                            await context.Interaction.FollowupAsync($"An error occurred while executing: {result.ErrorReason}. If this keeps happening, please tell the bot's creator what you were doing and ask them to look at the logs for `{DateTime.Now:yyyy-MM-dd}` at `{DateTime.Now:HH:mm}`");
                         else
-                            await context.Interaction.RespondAsync($"An error occurred while executing: {result.ErrorReason}");
+                            await context.Interaction.RespondAsync($"An error occurred while executing: {result.ErrorReason}. If this keeps happening, please tell the bot's creator what you were doing and ask them to look at the logs for `{DateTime.Now:yyyy-MM-dd}` at `{DateTime.Now:HH:mm}`");
                         _logger.SendLog(LogEventLevel.Warning, context.Guild.Id, result.ErrorReason, caller: info.MethodName);
                         break;
                 }
