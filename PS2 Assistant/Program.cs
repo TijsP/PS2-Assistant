@@ -62,7 +62,6 @@ public class Program
 
         //  Setup services collection
         builder.Services
-            .AddHostedService<CLIHandler>()
             .AddSingleton(_botclient)
             .AddSingleton(_botDatabase)
             .AddSingleton(_censusclient)
@@ -73,6 +72,9 @@ public class Program
             .AddSingleton<OutfitTagHandler>()
             .AddSingleton<AssistantUtils>()
             .AddSingleton(x => new InteractionService(x.GetRequiredService<DiscordSocketClient>(), new InteractionServiceConfig { LogLevel = LogSeverity.Verbose }))
+            .AddSingleton<ServerMergeTrackerHandler>()
+            .AddHostedService<CLIHandler>()
+            .AddHostedService(x => x.GetRequiredService<ServerMergeTrackerHandler>())
             .AddScheduler()
             .BuildServiceProvider();
 
@@ -82,7 +84,17 @@ public class Program
         //  Schedule jobs to run at selected intervals
         host.Services.UseScheduler(scheduler =>
         {
-
+            if (DateTime.UtcNow < AssistantUtils.ServerMergeEventEndTime.AddMinutes(10))
+            {
+                scheduler.ScheduleWithParams<ServerMergeEmbedUpdateInvocable>(
+                    //  Dependency injection doesn't seem to work here, so pass them manually instead
+                    host.Services.GetRequiredService<HttpClient>(),
+                    host.Services.GetRequiredService<ServerMergeTrackerHandler>(),
+                    host.Services.GetRequiredService<SourceLogger>(),
+                    host.Services.GetRequiredService<IConfiguration>())
+                    .EveryMinute()
+                        .When(() => new Task<bool>(() => DateTime.UtcNow < AssistantUtils.ServerMergeEventEndTime.AddMinutes(10)));
+            }
         });
 
         //  Initialize both interation and bot client handlers

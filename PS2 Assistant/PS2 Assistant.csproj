@@ -43,6 +43,7 @@
   <ItemGroup>
     <Folder Include="Handlers\Autocomplete\" />
     <Folder Include="Logs\" />
+    <Folder Include="MergeTracker\" />
   </ItemGroup>
 
 </Project>
