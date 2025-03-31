@@ -1,6 +1,7 @@
 ﻿using Discord;
 using Discord.Interactions;
 using PS2_Assistant.Attributes;
+using PS2_Assistant.Handlers;
 using PS2_Assistant.Logger;
 
 namespace PS2_Assistant.Modules.SlashCommands
@@ -18,6 +19,13 @@ namespace PS2_Assistant.Modules.SlashCommands
             public Diagnostics(SourceLogger logger)
             {
                 _logger = logger;
+            }
+
+            [SlashCommand("get-merge-tracker-file-size", "Returns the file size of the SocketDumb.json file, as used by the server merge tracker module")]
+            public async Task GetMergeTrackerLogFileSize()
+            {
+                long length = new FileInfo(ServerMergeTrackerHandler.GetRelativeSocketDumpPath()).Length;
+                await RespondAsync("SocketDump.json size in bytes: " + length.ToString());
             }
 
             [SlashCommand("send-log-file", "Returns a log file")]
@@ -62,7 +70,7 @@ namespace PS2_Assistant.Modules.SlashCommands
 
                         try
                         {
-                            FileStream fileStream = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                            FileStream fileStream = new (file.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                             Stream streamReader = new StreamReader(fileStream, encoding: System.Text.Encoding.Default).BaseStream;
                             requestedLogFiles.Add(new(streamReader, file.Name));
                         }

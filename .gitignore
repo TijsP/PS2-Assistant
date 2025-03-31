@@ -7,6 +7,7 @@
 DB\ backups/
 Migrations/
 Logs/
+MergeTracker/
 
 # User-specific files
 *.rsuser

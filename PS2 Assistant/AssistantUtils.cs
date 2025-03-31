@@ -13,6 +13,8 @@ namespace PS2_Assistant
         public const ChannelPermission channelWritePermissions = ChannelPermission.ViewChannel | ChannelPermission.SendMessages;
         public const string logFilePath = "Logs";
 
+        public static readonly DateTime ServerMergeEventEndTime = new(2025, 3, 30, 7, 10, 0, DateTimeKind.Utc);
+
         private readonly DiscordSocketClient _client;
         private readonly SourceLogger _logger;
         private readonly BotContext _guildDb;
